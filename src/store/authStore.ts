@@ -4,9 +4,11 @@ import { persist } from 'zustand/middleware';
 interface AuthState {
   accessToken: string | null;
   user: { id: string; nickname: string; profileImage?: string } | null;
+  _hasHydrated: boolean;
   setToken: (token: string) => void;
   setUser: (user: AuthState['user']) => void;
   logout: () => void;
+  setHasHydrated: (v: boolean) => void;
 }
 
 export const useAuthStore = create<AuthState>()(
@@ -14,6 +16,7 @@ export const useAuthStore = create<AuthState>()(
     (set) => ({
       accessToken: null,
       user: null,
+      _hasHydrated: false,
       setToken: (token) => {
         localStorage.setItem('accessToken', token);
         set({ accessToken: token });
@@ -23,7 +26,13 @@ export const useAuthStore = create<AuthState>()(
         localStorage.removeItem('accessToken');
         set({ accessToken: null, user: null });
       },
+      setHasHydrated: (v) => set({ _hasHydrated: v }),
     }),
-    { name: 'auth' }
+    {
+      name: 'auth',
+      onRehydrateStorage: () => (state) => {
+        state?.setHasHydrated(true);
+      },
+    }
   )
 );

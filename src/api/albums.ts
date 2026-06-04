@@ -16,8 +16,13 @@ export interface AlbumMember {
   role: string;
 }
 
+export interface AlbumListResponse {
+  owned: Album[];
+  joined: Album[];
+}
+
 export const albumsApi = {
-  list: () => api.get<{ data: Album[] }>('/albums').then((r) => r.data.data),
+  list: () => api.get<{ data: AlbumListResponse }>('/albums').then((r) => r.data.data),
 
   create: (name: string, coverImage?: string) =>
     api.post<{ data: Album }>('/albums', { name, coverImage }).then((r) => r.data.data),
