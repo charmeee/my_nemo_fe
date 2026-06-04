@@ -15,7 +15,13 @@ export default function AuthCallbackPage() {
     const token = searchParams.get('token');
     if (token) {
       setToken(token);
-      navigate('/albums', { replace: true });
+      const pendingInvite = sessionStorage.getItem('pendingInvite');
+      if (pendingInvite) {
+        sessionStorage.removeItem('pendingInvite');
+        navigate(`/invite/${pendingInvite}`, { replace: true });
+      } else {
+        navigate('/albums', { replace: true });
+      }
     } else {
       navigate('/login', { replace: true });
     }

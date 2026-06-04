@@ -7,6 +7,7 @@ export interface Album {
   memberCount: number;
   isLocked: boolean;
   createdAt: string;
+  myRole?: string;
 }
 
 export interface AlbumMember {
@@ -31,7 +32,7 @@ export const albumsApi = {
     api.get<{ data: Album }>(`/albums/${id}`).then((r) => r.data.data),
 
   update: (id: string, name: string) =>
-    api.put(`/albums/${id}`, { name }),
+    api.patch(`/albums/${id}`, { name }),
 
   delete: (id: string) =>
     api.delete(`/albums/${id}`),
@@ -43,10 +44,10 @@ export const albumsApi = {
     api.delete(`/albums/${albumId}/members/${userId}`),
 
   leave: (id: string) =>
-    api.post(`/albums/${id}/leave`),
+    api.delete(`/albums/${id}/members/me`),
 
   generateInviteLink: (id: string) =>
-    api.post<{ data: { token: string; expiresAt: string } }>(`/invite?albumId=${id}`).then((r) => r.data.data),
+    api.post<{ data: { token: string; expiresAt: string } }>(`/albums/${id}/invite`, { role: 'EDITOR', approvalRequired: false }).then((r) => r.data.data),
 
   getInviteInfo: (token: string) =>
     api.get<{ data: { albumName: string; inviterNickname: string } }>(`/invite/${token}/info`).then((r) => r.data.data),
