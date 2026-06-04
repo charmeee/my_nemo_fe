@@ -5,7 +5,7 @@ export default function ProtectedRoute({ children }: { children: React.ReactNode
   const token = useAuthStore((s) => s.accessToken);
   const hasHydrated = useAuthStore((s) => s._hasHydrated);
 
-  if (!hasHydrated) return null; // 하이드레이션 완료 전 렌더 보류
+  if (!hasHydrated) return <div className="nemo-spinner" />; // 하이드레이션 완료 전 스피너
 
   if (!token) return <Navigate to="/login" replace />;
   return <>{children}</>;

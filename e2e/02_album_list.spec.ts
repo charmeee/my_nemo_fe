@@ -14,7 +14,7 @@ test.describe('앨범 목록', () => {
 
   test('앨범 목록 페이지 정상 진입', async ({ page }) => {
     await page.goto('/albums');
-    await expect(page.getByText('내 앨범', { exact: false })).toBeVisible({ timeout: 8000 });
+    await expect(page.getByText('내 앨범', { exact: false }).first()).toBeVisible({ timeout: 8000 });
     await page.screenshot({ path: 'e2e/screenshots/02_album_list.png', fullPage: true });
   });
 

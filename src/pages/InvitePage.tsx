@@ -33,16 +33,80 @@ export default function InvitePage() {
     }
   };
 
-  if (error) return <div style={{ padding: '2rem', textAlign: 'center', color: 'red' }}>{error}</div>;
-  if (!info) return <div style={{ padding: '2rem', textAlign: 'center' }}>초대 링크 확인 중...</div>;
+  if (error) return (
+    <div style={{
+      minHeight: '100vh', display: 'flex', flexDirection: 'column',
+      alignItems: 'center', justifyContent: 'center',
+      background: 'linear-gradient(135deg, #FFF0F5, #F5EEFF)', padding: '24px',
+    }}>
+      <div style={{ fontSize: '3rem', marginBottom: '16px' }}>🔗</div>
+      <p style={{ color: '#FF6B9D', fontWeight: 600, fontSize: '1rem' }}>{error}</p>
+      <button className="nemo-btn nemo-btn-ghost" style={{ marginTop: '20px' }} onClick={() => navigate('/albums')}>
+        홈으로 돌아가기
+      </button>
+    </div>
+  );
+
+  if (!info) return (
+    <div style={{
+      minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center',
+      background: 'linear-gradient(135deg, #FFF0F5, #F5EEFF)',
+    }}>
+      <div className="nemo-spinner" style={{ height: 'auto' }}>
+        <p style={{ color: '#9C8BA6', fontSize: '0.9rem' }}>초대 링크 확인 중...</p>
+      </div>
+    </div>
+  );
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100vh', gap: '1rem' }}>
-      <h2>{info.albumName}</h2>
-      <p style={{ color: '#666' }}>{info.inviterNickname}님이 앨범에 초대했습니다.</p>
-      <button onClick={handleJoin} disabled={joining} style={{ padding: '12px 24px', background: '#333', color: '#fff', border: 'none', borderRadius: '8px', cursor: 'pointer', fontSize: '1rem' }}>
-        {joining ? '참여 중...' : '앨범 참여하기'}
-      </button>
+    <div style={{
+      minHeight: '100vh',
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+      background: 'linear-gradient(135deg, #FFF0F5 0%, #F5EEFF 50%, #FFF9F5 100%)',
+      padding: '24px',
+    }}>
+      <div style={{
+        background: 'rgba(255,255,255,0.9)',
+        backdropFilter: 'blur(20px)',
+        borderRadius: '28px',
+        border: '1px solid rgba(255,107,157,0.12)',
+        boxShadow: '0 8px 40px rgba(132,94,247,0.12)',
+        padding: '44px 40px',
+        maxWidth: '380px',
+        width: '100%',
+        textAlign: 'center',
+        animation: 'nemoFadeIn 0.3s ease',
+      }}>
+        <div style={{
+          width: '72px', height: '72px',
+          background: 'linear-gradient(135deg, #FF6B9D, #845EF7)',
+          borderRadius: '20px',
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          fontSize: '2rem', margin: '0 auto 20px',
+          boxShadow: '0 4px 16px rgba(255,107,157,0.3)',
+        }}>📷</div>
+
+        <p style={{ fontSize: '0.85rem', color: '#9C8BA6', marginBottom: '4px' }}>
+          {info.inviterNickname}님이 초대했어요
+        </p>
+        <h2 style={{ fontSize: '1.4rem', fontWeight: 700, color: '#1C1017', marginBottom: '8px' }}>
+          {info.albumName}
+        </h2>
+        <p style={{ fontSize: '0.85rem', color: '#9C8BA6', marginBottom: '32px' }}>
+          이 앨범에 참여해 추억을 함께 꾸며보세요
+        </p>
+
+        <button
+          className="nemo-btn nemo-btn-primary"
+          onClick={handleJoin}
+          disabled={joining}
+          style={{ width: '100%', padding: '14px', fontSize: '1rem', borderRadius: '14px' }}
+        >
+          {joining ? '참여 중...' : accessToken ? '앨범 참여하기' : '로그인 후 참여하기'}
+        </button>
+      </div>
     </div>
   );
 }

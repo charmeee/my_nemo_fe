@@ -17,7 +17,7 @@ test.describe('앨범 에디터', () => {
   test('에디터 진입 - 헤더에 앨범명 노출', async ({ page }) => {
     await page.goto(`/albums/${EXISTING_ALBUM_ID}`);
     await expect(page.locator('text=첫 번째 앨범')).toBeVisible({ timeout: 10000 });
-    await expect(page.locator('text=← 앨범 목록')).toBeVisible({ timeout: 4000 });
+    await expect(page.locator('text=← 목록')).toBeVisible({ timeout: 4000 });
     await page.screenshot({ path: 'e2e/screenshots/04_editor_header.png', fullPage: true });
   });
 
@@ -29,10 +29,10 @@ test.describe('앨범 에디터', () => {
     await page.screenshot({ path: 'e2e/screenshots/04_editor_tldraw.png', fullPage: true });
   });
 
-  test('"← 앨범 목록" 클릭 시 /albums로 이동', async ({ page }) => {
+  test('"← 목록" 클릭 시 /albums로 이동', async ({ page }) => {
     await page.goto(`/albums/${EXISTING_ALBUM_ID}`);
-    await expect(page.locator('text=← 앨범 목록')).toBeVisible({ timeout: 10000 });
-    await page.locator('text=← 앨범 목록').click();
+    await expect(page.locator('text=← 목록')).toBeVisible({ timeout: 10000 });
+    await page.locator('text=← 목록').click();
     await expect(page).toHaveURL(/\/albums$/, { timeout: 8000 });
   });
 });
