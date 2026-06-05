@@ -22,6 +22,8 @@ export default function AlbumEditorPage() {
   const [remoteElements, setRemoteElements] = useState<readonly ExcalidrawElement[] | null>(null);
 
   const excalidrawApiRef = useRef<ExcalidrawAPI | null>(null);
+  const currentPageIdRef = useRef(currentPageId);
+  currentPageIdRef.current = currentPageId;
 
   // Album info
   const { data: album } = useQuery({
@@ -70,18 +72,21 @@ export default function AlbumEditorPage() {
     currentPageId,
     getToken,
     onElements: useCallback((elements: readonly ExcalidrawElement[], pageId: string) => {
-      if (pageId === currentPageId) {
+      if (pageId === currentPageIdRef.current) {
         setRemoteElements(elements);
       }
       setPageElements((prev) => ({ ...prev, [pageId]: elements }));
-    }, [currentPageId]),
+    }, []),
     onPageEvent: useCallback((event) => {
       if (event.event === 'added') {
-        setPages((prev) => [...prev, { pageId: event.pageId, name: event.pageName, pageOrder: event.pageOrder }]);
+        setPages((prev) => {
+          if (prev.some((p) => p.pageId === event.pageId)) return prev;
+          return [...prev, { pageId: event.pageId, name: event.pageName, pageOrder: event.pageOrder }];
+        });
       } else if (event.event === 'deleted') {
         setPages((prev) => {
           const next = prev.filter((p) => p.pageId !== event.pageId);
-          if (currentPageId === event.pageId && next.length > 0) {
+          if (currentPageIdRef.current === event.pageId && next.length > 0) {
             setCurrentPageId(next[0].pageId);
           }
           return next;
@@ -89,7 +94,7 @@ export default function AlbumEditorPage() {
       } else if (event.event === 'reordered') {
         setPages((prev) => prev.map((p) => p.pageId === event.pageId ? { ...p, pageOrder: event.pageOrder, name: event.pageName } : p));
       }
-    }, [currentPageId]),
+    }, []),
   });
 
   // Page switch
@@ -118,7 +123,7 @@ export default function AlbumEditorPage() {
       api.post<{ data: PageInfo }>(`/albums/${albumId}/pages`, { name: `페이지 ${pages.length + 1}` })
         .then((r) => r.data.data),
     onSuccess: (page) => {
-      setPages((prev) => [...prev, page]);
+      setPages((prev) => prev.some((p) => p.pageId === page.pageId) ? prev : [...prev, page]);
       setCurrentPageId(page.pageId);
       onPageSwitch();
     },

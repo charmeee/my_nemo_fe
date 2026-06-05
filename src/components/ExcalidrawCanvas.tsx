@@ -1,5 +1,6 @@
 import { useEffect, useRef, lazy, Suspense } from 'react';
 import type { ExcalidrawElement, AppState, BinaryFiles } from '@excalidraw/excalidraw/types';
+import '@excalidraw/excalidraw/index.css';
 
 // Lazy import to avoid SSR issues
 const Excalidraw = lazy(() =>
