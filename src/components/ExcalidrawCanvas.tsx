@@ -68,20 +68,28 @@ export default function ExcalidrawCanvas({
         </div>
       }
     >
-      <Excalidraw
-        key={pageId}
-        initialData={{
-          elements: initialElements,
-          appState: { viewBackgroundColor: '#F7F3FF' },
-        }}
-        onChange={onChange}
-        excalidrawAPI={(api: any) => {
-          apiRef.current = api;
-          onAPI(api);
-        }}
-        isCollaborating={!isReadonly}
-        viewModeEnabled={isReadonly}
-      />
+      <div style={{ height: '100%', position: 'relative' }} className="excalidraw-wrapper">
+        <style>{`
+          .excalidraw-wrapper .App-toolbar {
+            top: auto !important;
+            bottom: 16px !important;
+          }
+        `}</style>
+        <Excalidraw
+          key={pageId}
+          initialData={{
+            elements: initialElements,
+            appState: { viewBackgroundColor: '#F7F3FF' },
+          }}
+          onChange={onChange}
+          excalidrawAPI={(api: any) => {
+            apiRef.current = api;
+            onAPI(api);
+          }}
+          isCollaborating={!isReadonly}
+          viewModeEnabled={isReadonly}
+        />
+      </div>
     </Suspense>
   );
 }
