@@ -3,6 +3,8 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { albumsApi } from '../api/albums';
 import { useAuthStore } from '../store/authStore';
 import { useRef, useCallback, useState, useEffect } from 'react';
+import AlbumSettingsModal from '../components/AlbumSettingsModal';
+import MembersModal from '../components/MembersModal';
 import type { ExcalidrawElement, AppState, BinaryFiles } from '@excalidraw/excalidraw/types';
 import ExcalidrawCanvas, { type ExcalidrawAPI } from '../components/ExcalidrawCanvas';
 import PageTabs, { type PageInfo } from '../components/PageTabs';
@@ -18,6 +20,8 @@ export default function AlbumEditorPage() {
 
   const [pages, setPages] = useState<PageInfo[]>([]);
   const [currentPageId, setCurrentPageId] = useState<string | null>(null);
+  const [showSettings, setShowSettings] = useState(false);
+  const [showMembers, setShowMembers] = useState(false);
   const [pageElements, setPageElements] = useState<Record<string, readonly ExcalidrawElement[]>>({});
   const [remoteElements, setRemoteElements] = useState<readonly ExcalidrawElement[] | null>(null);
 
@@ -198,6 +202,22 @@ export default function AlbumEditorPage() {
           {isConnecting && <StatusPill color="#845EF7" bg="#F3F0FF" border="#D8C8F0" label="연결 중" pulse />}
           {isOnline && <StatusPill color="#059669" bg="#ECFDF5" border="#A7F3D0" label="실시간 동기화" />}
           {isOffline && <StatusPill color="#E11D48" bg="#FFF1F2" border="#FECDD3" label="오프라인" />}
+          <button
+            onClick={() => setShowMembers(true)}
+            title="멤버 관리"
+            style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '1.2rem', padding: '4px 6px', borderRadius: '8px', lineHeight: 1 }}
+            onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.background = '#F0EBFF'; }}
+            onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.background = 'none'; }}
+          >👥</button>
+          {album?.myRole === 'ADMIN' && (
+            <button
+              onClick={() => setShowSettings(true)}
+              title="앨범 설정"
+              style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '1.2rem', padding: '4px 6px', borderRadius: '8px', lineHeight: 1 }}
+              onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.background = '#F0EBFF'; }}
+              onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.background = 'none'; }}
+            >⚙️</button>
+          )}
         </div>
       </header>
 
@@ -242,6 +262,13 @@ export default function AlbumEditorPage() {
       </div>
 
       <style>{`@keyframes spin { to { transform: rotate(360deg); } } @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.4} }`}</style>
+
+      {showSettings && album && (
+        <AlbumSettingsModal album={album} onClose={() => setShowSettings(false)} />
+      )}
+      {showMembers && album && (
+        <MembersModal albumId={albumId!} myRole={album.myRole ?? 'VIEWER'} onClose={() => setShowMembers(false)} />
+      )}
     </div>
   );
 }

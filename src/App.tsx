@@ -4,6 +4,7 @@ import AuthCallbackPage from './pages/AuthCallbackPage';
 import AlbumListPage from './pages/AlbumListPage';
 import AlbumEditorPage from './pages/AlbumEditorPage';
 import InvitePage from './pages/InvitePage';
+import TrashPage from './pages/TrashPage';
 import ProtectedRoute from './components/ProtectedRoute';
 
 export default function App() {
@@ -14,6 +15,7 @@ export default function App() {
       <Route path="/invite/:token" element={<InvitePage />} />
       <Route path="/albums" element={<ProtectedRoute><AlbumListPage /></ProtectedRoute>} />
       <Route path="/albums/:albumId" element={<ProtectedRoute><AlbumEditorPage /></ProtectedRoute>} />
+      <Route path="/trash" element={<ProtectedRoute><TrashPage /></ProtectedRoute>} />
       <Route path="/" element={<Navigate to="/albums" replace />} />
     </Routes>
   );

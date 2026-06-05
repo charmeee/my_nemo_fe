@@ -3,6 +3,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Link, useNavigate } from 'react-router-dom';
 import { albumsApi, type Album } from '../api/albums';
 import { useAuthStore } from '../store/authStore';
+import NotificationBell from '../components/NotificationBell';
 
 /* ─── Album Cover Colors (기본 커버 팔레트) ─── */
 const COVER_COLORS = [
@@ -199,6 +200,14 @@ export default function AlbumListPage() {
           }}>nemo</div>
 
           <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+            <NotificationBell />
+            <button
+              className="nemo-btn nemo-btn-ghost"
+              onClick={() => navigate('/trash')}
+              style={{ padding: '8px 14px', fontSize: '0.875rem' }}
+            >
+              🗑️ 휴지통
+            </button>
             <button
               className="nemo-btn nemo-btn-primary"
               onClick={() => setShowCreate(true)}
