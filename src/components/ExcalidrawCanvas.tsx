@@ -1,5 +1,6 @@
 import { useEffect, useRef, lazy, Suspense } from 'react';
-import type { ExcalidrawElement, AppState, BinaryFiles } from '@excalidraw/excalidraw/types';
+import type { ExcalidrawElement } from '@excalidraw/excalidraw/element/types';
+import type { AppState, BinaryFiles } from '@excalidraw/excalidraw/types';
 import '@excalidraw/excalidraw/index.css';
 
 // Lazy import to avoid SSR issues
@@ -70,9 +71,12 @@ export default function ExcalidrawCanvas({
     >
       <div style={{ height: '100%', position: 'relative' }} className="excalidraw-wrapper">
         <style>{`
-          .excalidraw-wrapper .App-toolbar {
+          .excalidraw-wrapper .shapes-section {
+            position: absolute !important;
+            bottom: 0 !important;
             top: auto !important;
-            bottom: 16px !important;
+            left: 50% !important;
+            transform: translateX(-50%) !important;
           }
         `}</style>
         <Excalidraw
