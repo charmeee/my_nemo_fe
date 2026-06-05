@@ -1,4 +1,3 @@
-import { useState } from 'react';
 
 export interface PageInfo {
   pageId: string;

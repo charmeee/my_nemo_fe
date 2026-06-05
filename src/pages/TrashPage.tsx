@@ -55,7 +55,11 @@ export default function TrashPage() {
             <TrashCard
               key={item.id}
               item={item}
-              onRestore={() => restore.mutate(item.id)}
+              onRestore={() => {
+                if (window.confirm('앨범을 복원하시겠습니까?')) {
+                  restore.mutate(item.id);
+                }
+              }}
               onDelete={() => {
                 if (window.confirm('영구 삭제하면 복원할 수 없습니다. 계속하시겠습니까?')) {
                   deletePerm.mutate(item.id);

@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useNavigate } from 'react-router-dom';
 import { notificationsApi, notifLabel, type NotificationItem } from '../api/notifications';
 import { useAuthStore } from '../store/authStore';
 
@@ -129,7 +130,7 @@ export default function NotificationBell() {
               </div>
             ) : (
               notifications.map((n) => (
-                <NotifRow key={n.id} n={n} onRead={() => !n.isRead && markRead.mutate(n.id)} />
+                <NotifRow key={n.id} n={n} onRead={() => !n.isRead && markRead.mutate(n.id)} onClose={() => setOpen(false)} />
               ))
             )}
           </div>
@@ -139,14 +140,25 @@ export default function NotificationBell() {
   );
 }
 
-function NotifRow({ n, onRead }: { n: NotificationItem; onRead: () => void }) {
+function NotifRow({ n, onRead, onClose }: { n: NotificationItem; onRead: () => void; onClose: () => void }) {
+  const navigate = useNavigate();
+  const albumId = n.payload?.albumId as string | undefined;
+
+  const handleClick = () => {
+    onRead();
+    if (albumId) {
+      onClose();
+      navigate(`/albums/${albumId}`);
+    }
+  };
+
   return (
     <div
-      onClick={onRead}
+      onClick={handleClick}
       style={{
         padding: '12px 16px',
         borderBottom: '1px solid #FAF5FA',
-        cursor: n.isRead ? 'default' : 'pointer',
+        cursor: 'pointer',
         background: n.isRead ? 'transparent' : '#FFF9FC',
         display: 'flex', gap: '10px', alignItems: 'flex-start',
       }}

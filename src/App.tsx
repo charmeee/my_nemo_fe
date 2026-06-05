@@ -15,6 +15,8 @@ export default function App() {
       <Route path="/invite/:token" element={<InvitePage />} />
       <Route path="/albums" element={<ProtectedRoute><AlbumListPage /></ProtectedRoute>} />
       <Route path="/albums/:albumId" element={<ProtectedRoute><AlbumEditorPage /></ProtectedRoute>} />
+      {/* N-CORE-13: 게스트 에디터 (읽기 전용, 비인증) */}
+      <Route path="/albums/:albumId/guest" element={<AlbumEditorPage />} />
       <Route path="/trash" element={<ProtectedRoute><TrashPage /></ProtectedRoute>} />
       <Route path="/" element={<Navigate to="/albums" replace />} />
     </Routes>

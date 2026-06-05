@@ -1,11 +1,12 @@
-import { useParams, useNavigate } from 'react-router-dom';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useParams, useNavigate, useLocation } from 'react-router-dom';
+import { useQuery, useMutation } from '@tanstack/react-query';
 import { albumsApi } from '../api/albums';
 import { useAuthStore } from '../store/authStore';
 import { useRef, useCallback, useState, useEffect } from 'react';
 import AlbumSettingsModal from '../components/AlbumSettingsModal';
 import MembersModal from '../components/MembersModal';
-import type { ExcalidrawElement, AppState, BinaryFiles } from '@excalidraw/excalidraw/types';
+import type { ExcalidrawElement } from '@excalidraw/excalidraw/element/types';
+import type { AppState, BinaryFiles } from '@excalidraw/excalidraw/types';
 import ExcalidrawCanvas, { type ExcalidrawAPI } from '../components/ExcalidrawCanvas';
 import PageTabs, { type PageInfo } from '../components/PageTabs';
 import { useExcalidrawSync } from '../hooks/useExcalidrawSync';
@@ -16,7 +17,9 @@ const API_URL = import.meta.env.VITE_API_URL ?? 'http://localhost:8080';
 export default function AlbumEditorPage() {
   const { albumId } = useParams<{ albumId: string }>();
   const navigate = useNavigate();
-  const queryClient = useQueryClient();
+  const location = useLocation();
+  // N-CORE-13: /albums/:albumId/guest 경로이면 게스트 모드
+  const isGuest = location.pathname.endsWith('/guest');
 
   const [pages, setPages] = useState<PageInfo[]>([]);
   const [currentPageId, setCurrentPageId] = useState<string | null>(null);
@@ -36,24 +39,40 @@ export default function AlbumEditorPage() {
     enabled: !!albumId,
   });
 
-  const isViewer = album?.myRole === 'VIEWER';
+  const isViewer = isGuest || album?.myRole === 'VIEWER';
 
   // Load pages
   useEffect(() => {
     if (!albumId) return;
-    api.get<{ data: PageInfo[] }>(`/albums/${albumId}/pages`)
-      .then((r) => {
-        const ps = r.data.data;
-        setPages(ps);
-        if (ps.length > 0 && !currentPageId) {
-          setCurrentPageId(ps[0].pageId);
-        }
-      })
-      .catch(console.error);
-  }, [albumId]);
+    if (isGuest) {
+      // N-CORE-13: 게스트 — 공개 초대 코드 기반 페이지 목록 조회
+      const code = sessionStorage.getItem('guestInviteCode');
+      if (!code) return;
+      const baseUrl = import.meta.env.VITE_API_URL ?? 'http://localhost:8080';
+      fetch(`${baseUrl}/invite/${code}/pages`)
+        .then((r) => r.json())
+        .then((j) => {
+          const ps: PageInfo[] = j.data ?? [];
+          setPages(ps);
+          if (ps.length > 0 && !currentPageId) setCurrentPageId(ps[0].pageId);
+        })
+        .catch(console.error);
+    } else {
+      api.get<{ data: PageInfo[] }>(`/albums/${albumId}/pages`)
+        .then((r) => {
+          const ps = r.data.data;
+          setPages(ps);
+          if (ps.length > 0 && !currentPageId) setCurrentPageId(ps[0].pageId);
+        })
+        .catch(console.error);
+    }
+  }, [albumId, isGuest]);
 
-  // Token getter (refresh if expiring)
+  // Token getter (refresh if expiring; 게스트는 sessionStorage guestToken 반환)
   const getToken = useCallback(async (): Promise<string | null> => {
+    if (isGuest) {
+      return sessionStorage.getItem('guestToken');
+    }
     let token = useAuthStore.getState().accessToken;
     if (!token) return null;
     try {
@@ -68,10 +87,10 @@ export default function AlbumEditorPage() {
       }
     } catch {}
     return token;
-  }, []);
+  }, [isGuest]);
 
   // Excalidraw sync hook
-  const { status, pushChanges, pushPresence, onPageSwitch } = useExcalidrawSync({
+  const { status, forceCloseMessage, pushChanges, pushPresence, onPageSwitch, collaborators, participants } = useExcalidrawSync({
     albumId: albumId ?? '',
     currentPageId,
     getToken,
@@ -79,7 +98,17 @@ export default function AlbumEditorPage() {
       if (pageId === currentPageIdRef.current) {
         setRemoteElements(elements);
       }
-      setPageElements((prev) => ({ ...prev, [pageId]: elements }));
+      // diff patch를 받을 수 있으므로 기존 캐시에 LWW 머지 (version 기준)
+      setPageElements((prev) => {
+        const existing = prev[pageId];
+        if (!existing || existing.length === 0) return { ...prev, [pageId]: elements };
+        const map = new Map(existing.map((el) => [(el as ExcalidrawElement).id, el as ExcalidrawElement]));
+        for (const el of elements as ExcalidrawElement[]) {
+          const cur = map.get(el.id);
+          if (!cur || el.version > cur.version) map.set(el.id, el);
+        }
+        return { ...prev, [pageId]: Array.from(map.values()) };
+      });
     }, []),
     onPageEvent: useCallback((event) => {
       if (event.event === 'added') {
@@ -158,14 +187,83 @@ export default function AlbumEditorPage() {
     [currentPageId, isViewer, pushChanges]
   );
 
+  // Presence: 커서 throttle 50ms, 선택 debounce 100ms
+  const pushPresenceRef = useRef(pushPresence);
+  pushPresenceRef.current = pushPresence;
+  const isViewerRef = useRef(isViewer);
+  isViewerRef.current = isViewer;
+
+  const lastCursorPushRef = useRef(0);
+  const handlePointerUpdate = useCallback((payload: { pointer: { x: number; y: number } }) => {
+    const now = Date.now();
+    if (now - lastCursorPushRef.current < 50) return;
+    lastCursorPushRef.current = now;
+    const pid = currentPageIdRef.current;
+    if (!pid || isViewerRef.current) return;
+    pushPresenceRef.current(pid, payload.pointer, []);
+  }, []);
+
+  const selectionTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const handleSelectionChange = useCallback((selectedIds: string[]) => {
+    if (selectionTimerRef.current) clearTimeout(selectionTimerRef.current);
+    selectionTimerRef.current = setTimeout(() => {
+      const pid = currentPageIdRef.current;
+      if (!pid || isViewerRef.current) return;
+      pushPresenceRef.current(pid, null, selectedIds);
+    }, 100);
+  }, []);
+
   const isOnline = status === 'connected';
   const isOffline = status === 'offline';
   const isConnecting = status === 'connecting';
 
   if (!albumId) return <div style={{ padding: '2rem' }}>앨범 ID가 없습니다.</div>;
 
+  if (forceCloseMessage) {
+    return (
+      <div style={{
+        width: '100vw', height: '100vh', display: 'flex', flexDirection: 'column',
+        alignItems: 'center', justifyContent: 'center', background: '#F7F3FF', gap: '16px',
+      }}>
+        <p style={{ fontSize: '1.1rem', fontWeight: 600, color: '#333' }}>{forceCloseMessage}</p>
+        <button
+          onClick={() => navigate('/albums')}
+          style={{
+            background: 'linear-gradient(135deg, #845EF7, #FF6B9D)',
+            color: '#fff', border: 'none', borderRadius: '10px',
+            padding: '10px 24px', fontWeight: 700, cursor: 'pointer',
+          }}
+        >
+          앨범 목록으로
+        </button>
+      </div>
+    );
+  }
+
   return (
     <div style={{ width: '100vw', height: '100vh', display: 'flex', flexDirection: 'column', background: '#F7F3FF' }}>
+      {/* N-CORE-13: 게스트 로그인 유도 배너 */}
+      {isGuest && (
+        <div style={{
+          background: 'linear-gradient(90deg, #845EF7, #FF6B9D)',
+          color: '#fff', padding: '8px 20px',
+          display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+          fontSize: '0.82rem', fontWeight: 600, flexShrink: 0,
+        }}>
+          <span>지금은 읽기 전용으로 보고 있어요. 로그인하면 함께 편집할 수 있어요!</span>
+          <button
+            onClick={() => navigate('/login')}
+            style={{
+              background: 'rgba(255,255,255,0.25)', border: '1px solid rgba(255,255,255,0.5)',
+              color: '#fff', borderRadius: '8px', padding: '4px 14px',
+              cursor: 'pointer', fontWeight: 700, fontSize: '0.78rem',
+            }}
+          >
+            로그인
+          </button>
+        </div>
+      )}
+
       {/* Top Bar */}
       <header style={{
         height: '56px', padding: '0 20px', display: 'flex', alignItems: 'center',
@@ -198,10 +296,30 @@ export default function AlbumEditorPage() {
         </div>
 
         <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
+          {/* 참여자 태그 */}
+          {participants.map((p) => (
+            <div
+              key={p.userId}
+              title={p.userName}
+              style={{
+                padding: '3px 10px',
+                borderRadius: '20px',
+                background: p.color.background,
+                color: '#fff',
+                fontSize: '0.72rem',
+                fontWeight: 600,
+                whiteSpace: 'nowrap',
+                flexShrink: 0,
+              }}
+            >
+              {p.userName.length > 8 ? p.userName.slice(0, 8) + '...' : p.userName}
+            </div>
+          ))}
           {/* Status pill */}
           {isConnecting && <StatusPill color="#845EF7" bg="#F3F0FF" border="#D8C8F0" label="연결 중" pulse />}
           {isOnline && <StatusPill color="#059669" bg="#ECFDF5" border="#A7F3D0" label="실시간 동기화" />}
           {isOffline && <StatusPill color="#E11D48" bg="#FFF1F2" border="#FECDD3" label="오프라인" />}
+          {!isGuest && (
           <button
             onClick={() => setShowMembers(true)}
             title="멤버 관리"
@@ -209,7 +327,8 @@ export default function AlbumEditorPage() {
             onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.background = '#F0EBFF'; }}
             onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.background = 'none'; }}
           >👥</button>
-          {album?.myRole === 'ADMIN' && (
+          )}
+          {!isGuest && album?.myRole === 'ADMIN' && (
             <button
               onClick={() => setShowSettings(true)}
               title="앨범 설정"
@@ -245,6 +364,9 @@ export default function AlbumEditorPage() {
             onAPI={(api) => { excalidrawApiRef.current = api; }}
             onChange={handleChange}
             isReadonly={isViewer}
+            collaborators={collaborators}
+            onPointerUpdate={handlePointerUpdate}
+            onSelectionChange={handleSelectionChange}
           />
         ) : (
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', flexDirection: 'column', gap: '16px', color: '#9C8BA6' }}>

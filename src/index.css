@@ -215,3 +215,45 @@ h1, h2, h3 { font-weight: 700; letter-spacing: -0.02em; }
 }
 .nemo-badge-pink { background: var(--nemo-pink-light); color: var(--nemo-pink-dark); }
 .nemo-badge-purple { background: var(--nemo-purple-light); color: var(--nemo-purple); }
+
+/* ── Dark Mode ───────────────────────────────────────────── */
+@media (prefers-color-scheme: dark) {
+  :root {
+    --nemo-bg:          #0F0A0D;
+    --nemo-surface:     #1A1117;
+    --nemo-surface2:    #231820;
+    --nemo-border:      #2E1F28;
+    --nemo-border2:     #3A2A35;
+    --nemo-text:        #F0E8F5;
+    --nemo-text-2:      #C0A8C8;
+    --nemo-text-3:      #8A7090;
+    --nemo-pink-light:  rgba(255,107,157,0.15);
+    --nemo-purple-light:rgba(132,94,247,0.15);
+    --nemo-shadow-card: 0 2px 12px rgba(0,0,0,0.4);
+    --nemo-shadow-md:   0 4px 20px rgba(0,0,0,0.5);
+  }
+
+  body {
+    background: var(--nemo-bg);
+    color: var(--nemo-text);
+    color-scheme: dark;
+  }
+
+  /* Override hardcoded white/light backgrounds in inline styles */
+  header, main, .nemo-card {
+    background: var(--nemo-surface) !important;
+    border-color: var(--nemo-border) !important;
+  }
+
+  .nemo-input {
+    background: var(--nemo-surface2) !important;
+    color: var(--nemo-text) !important;
+    border-color: var(--nemo-border2) !important;
+  }
+
+  /* Notification panel, modal backgrounds */
+  [style*="background: #fff"],
+  [style*="background: rgb(255, 255, 255)"] {
+    background: var(--nemo-surface) !important;
+  }
+}

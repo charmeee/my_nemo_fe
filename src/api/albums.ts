@@ -1,5 +1,10 @@
 import api from './client';
 
+export interface MemberAvatar {
+  nickname: string;
+  profileImage?: string;
+}
+
 export interface Album {
   id: string;
   name: string;
@@ -7,7 +12,9 @@ export interface Album {
   memberCount: number;
   isLocked: boolean;
   createdAt: string;
+  updatedAt?: string;
   myRole?: string;
+  recentMembers?: MemberAvatar[];
 }
 
 export interface AlbumMember {
@@ -85,5 +92,21 @@ export const albumsApi = {
     api.get<{ data: { albumName: string; inviterNickname: string } }>(`/invite/${token}/info`).then((r) => r.data.data),
 
   joinByInvite: (token: string) =>
-    api.post(`/invite/${token}/join`),
+    api.post<{ data: { status: string } }>(`/invite/${token}/join`).then((r) => r.data.data),
+
+  // N-CORE-13: 게스트 세션 발급 (비인증)
+  getGuestSession: (code: string) =>
+    fetch(`${import.meta.env.VITE_API_URL ?? 'http://localhost:8080'}/invite/${code}/guest-session`, { method: 'POST' })
+      .then((r) => r.json())
+      .then((j) => j.data as { guestToken: string; albumId: string }),
+
+  // 게스트용 페이지 목록 (비인증)
+  getGuestPages: (code: string) =>
+    fetch(`${import.meta.env.VITE_API_URL ?? 'http://localhost:8080'}/invite/${code}/pages`)
+      .then((r) => r.json())
+      .then((j) => j.data as Array<{ pageId: string; name: string; pageOrder: number }>),
+
+  // N-CORE-08: 이메일로 멤버 직접 초대 (ADMIN 전용)
+  inviteByEmail: (albumId: string, email: string, role = 'EDITOR') =>
+    api.post(`/albums/${albumId}/members/invite-by-email`, { email, role }),
 };

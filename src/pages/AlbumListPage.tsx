@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Link, useNavigate } from 'react-router-dom';
-import { albumsApi, type Album } from '../api/albums';
+import { albumsApi, type Album, type MemberAvatar } from '../api/albums';
 import { useAuthStore } from '../store/authStore';
 import NotificationBell from '../components/NotificationBell';
 
@@ -16,6 +16,18 @@ const COVER_COLORS = [
 ];
 const getCoverColor = (id: string) =>
   COVER_COLORS[parseInt(id.replace(/-/g, '').slice(0, 4), 16) % COVER_COLORS.length];
+
+function relativeTime(iso: string): string {
+  const diff = Date.now() - new Date(iso).getTime();
+  const mins = Math.floor(diff / 60000);
+  if (mins < 1) return '방금 전';
+  if (mins < 60) return `${mins}분 전`;
+  const hours = Math.floor(mins / 60);
+  if (hours < 24) return `${hours}시간 전`;
+  const days = Math.floor(hours / 24);
+  if (days < 30) return `${days}일 전`;
+  return new Date(iso).toLocaleDateString('ko-KR', { month: 'short', day: 'numeric' });
+}
 
 /* ─── AlbumCard ─── */
 function AlbumCard({ album, owned }: { album: Album; owned: boolean }) {
@@ -74,8 +86,34 @@ function AlbumCard({ album, owned }: { album: Album; owned: boolean }) {
             fontWeight: 700, fontSize: '0.95rem', color: '#1C1017',
             marginBottom: '4px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
           }}>{album.name}</div>
-          <div style={{ fontSize: '0.8rem', color: '#9C8BA6' }}>
-            멤버 {album.memberCount}명
+          {album.recentMembers && album.recentMembers.length > 0 && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: '4px', marginBottom: '6px' }}>
+              {album.recentMembers.map((m: MemberAvatar, i: number) => (
+                <div key={i} style={{
+                  width: '22px', height: '22px', borderRadius: '50%',
+                  background: m.profileImage ? `url(${m.profileImage}) center/cover` : `hsl(${(m.nickname.charCodeAt(0) * 37) % 360}, 60%, 70%)`,
+                  border: '1.5px solid #fff',
+                  marginLeft: i > 0 ? '-6px' : 0,
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  fontSize: '0.6rem', fontWeight: 700, color: '#fff',
+                  flexShrink: 0,
+                  title: m.nickname,
+                } as React.CSSProperties}>
+                  {!m.profileImage && m.nickname.charAt(0).toUpperCase()}
+                </div>
+              ))}
+              {album.memberCount > 4 && (
+                <span style={{ fontSize: '0.65rem', color: '#9C8BA6', marginLeft: '2px' }}>+{album.memberCount - 4}</span>
+              )}
+            </div>
+          )}
+          <div style={{ fontSize: '0.8rem', color: '#9C8BA6', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <span>멤버 {album.memberCount}명</span>
+            {album.updatedAt && (
+              <span style={{ fontSize: '0.72rem', color: '#C0B0CC' }}>
+                {relativeTime(album.updatedAt)}
+              </span>
+            )}
           </div>
         </div>
       </div>

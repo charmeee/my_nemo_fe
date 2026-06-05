@@ -1,8 +1,8 @@
 import { useEffect, useRef, useCallback, useState } from 'react';
-import type { ExcalidrawElement, AppState, BinaryFiles } from '@excalidraw/excalidraw/types';
+import type { ExcalidrawElement } from '@excalidraw/excalidraw/element/types';
+import { getPresenceColor } from '../utils/presenceColor';
 
 const WS_URL = import.meta.env.VITE_WS_URL ?? 'ws://localhost:8080';
-const API_URL = import.meta.env.VITE_API_URL ?? 'http://localhost:8080';
 
 export type SyncStatus = 'connecting' | 'connected' | 'offline' | 'error';
 
@@ -19,6 +19,21 @@ export interface PageEvent {
   pageId: string;
   pageName: string;
   pageOrder: number;
+}
+
+export interface Collaborator {
+  pointer?: { x: number; y: number; tool: 'pointer' };
+  button?: 'up';
+  selectedElementIds?: Record<string, boolean>;
+  username?: string;
+  color?: { background: string; stroke: string };
+  isCurrentUser?: false;
+}
+
+export interface Participant {
+  userId: string;
+  userName: string;
+  color: { background: string; stroke: string };
 }
 
 interface PushMessage {
@@ -41,9 +56,16 @@ export function useExcalidrawSync({
   const pendingPushRef = useRef<PushMessage | null>(null);
   const queuedPushRef = useRef<PushMessage | null>(null);
   const [status, setStatus] = useState<SyncStatus>('connecting');
+  const [forceCloseMessage, setForceCloseMessage] = useState<string | null>(null);
   const reconnectTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const reconnectAttemptsRef = useRef(0);
   const currentPageIdRef = useRef(currentPageId);
   currentPageIdRef.current = currentPageId;
+
+  type ParticipantData = { userName: string; color: { background: string; stroke: string } };
+  type PresenceData = { pageId: string; cursor: { x: number; y: number } | null; selectedIds: string[] };
+  const [participantsMap, setParticipantsMap] = useState<Map<string, ParticipantData>>(new Map());
+  const [presenceMap, setPresenceMap] = useState<Map<string, PresenceData>>(new Map());
 
   const send = useCallback((data: object) => {
     const ws = wsRef.current;
@@ -64,16 +86,17 @@ export function useExcalidrawSync({
     const token = await getToken();
     if (!token) return;
 
-    const ws = new WebSocket(
-      `${WS_URL}/sync/excalidraw/${albumId}?token=${token}`
-    );
+    // 토큰은 URL 쿼리 파라미터가 아닌 connect 메시지 본문으로 전달 (로그/프록시 노출 방지)
+    const ws = new WebSocket(`${WS_URL}/sync/excalidraw/${albumId}`);
     wsRef.current = ws;
     setStatus('connecting');
 
     ws.onopen = () => {
       send({
         type: 'connect',
+        token,
         lastClockByPage: lastClockByPageRef.current,
+        currentPageId: currentPageIdRef.current,
         clientId: crypto.randomUUID(),
       });
     };
@@ -89,7 +112,17 @@ export function useExcalidrawSync({
       if (msg.type === 'pong') return;
 
       if (msg.type === 'connected') {
+        reconnectAttemptsRef.current = 0; // 연결 성공 시 backoff 카운터 초기화
         setStatus('connected');
+        if (msg.roomMembers) {
+          setParticipantsMap(() => {
+            const next = new Map<string, ParticipantData>();
+            for (const m of msg.roomMembers as { userId: string; userName: string }[]) {
+              next.set(m.userId, { userName: m.userName, color: getPresenceColor(m.userId) });
+            }
+            return next;
+          });
+        }
         if (msg.hydrationType === 'full') {
           for (const page of msg.pages ?? []) {
             lastClockByPageRef.current[page.pageId] = page.serverClock;
@@ -105,6 +138,38 @@ export function useExcalidrawSync({
             }
           }
         }
+      }
+
+      if (msg.type === 'user_joined') {
+        setParticipantsMap((prev) => {
+          const next = new Map(prev);
+          next.set(msg.userId, { userName: msg.userName, color: getPresenceColor(msg.userId) });
+          return next;
+        });
+      }
+
+      if (msg.type === 'user_left') {
+        setParticipantsMap((prev) => { const next = new Map(prev); next.delete(msg.userId); return next; });
+        setPresenceMap((prev) => { const next = new Map(prev); next.delete(msg.userId); return next; });
+      }
+
+      if (msg.type === 'presence') {
+        const p = msg.presence as { userId: string; userName: string; pageId: string; cursor: { x: number; y: number } | null; selectedIds: string[] };
+        setParticipantsMap((prev) => {
+          if (prev.has(p.userId)) return prev;
+          const next = new Map(prev);
+          next.set(p.userId, { userName: p.userName, color: getPresenceColor(p.userId) });
+          return next;
+        });
+        setPresenceMap((prev) => {
+          const next = new Map(prev);
+          next.set(p.userId, {
+            pageId: p.pageId ?? '',
+            cursor: p.cursor ?? null,
+            selectedIds: Array.isArray(p.selectedIds) ? p.selectedIds : [],
+          });
+          return next;
+        });
       }
 
       if (msg.type === 'patch') {
@@ -134,7 +199,14 @@ export function useExcalidrawSync({
 
       if (msg.type === 'force-close') {
         ws.close();
+        const reasonMessages: Record<string, string> = {
+          kicked: '앨범에서 추방되었습니다.',
+          'role-downgraded': '편집 권한이 변경되었습니다.',
+          'album-locked': '앨범이 잠겼습니다.',
+        };
+        const message = reasonMessages[msg.reason] ?? '연결이 종료되었습니다.';
         setStatus('error');
+        setForceCloseMessage(message);
       }
 
       if (msg.type === 'error') {
@@ -144,8 +216,10 @@ export function useExcalidrawSync({
 
     ws.onclose = () => {
       setStatus('offline');
-      // Exponential backoff reconnect (3s)
-      reconnectTimerRef.current = setTimeout(() => connect(), 3000);
+      // Exponential backoff: 3s → 6s → 12s → ... 최대 60s
+      const delay = Math.min(3000 * Math.pow(2, reconnectAttemptsRef.current), 60000);
+      reconnectAttemptsRef.current += 1;
+      reconnectTimerRef.current = setTimeout(() => connect(), delay);
     };
 
     ws.onerror = () => {
@@ -220,5 +294,27 @@ export function useExcalidrawSync({
     queuedPushRef.current = null;
   }, []);
 
-  return { status, pushChanges, pushPresence, onPageSwitch };
+  // collaborators: 현재 페이지 유저만 (Excalidraw prop용)
+  const collaborators = new Map<string, Collaborator>();
+  for (const [userId, presence] of Array.from(presenceMap.entries())) {
+    if (presence.pageId !== currentPageId) continue;
+    const pData = participantsMap.get(userId);
+    if (!pData) continue;
+    collaborators.set(userId, {
+      pointer: presence.cursor ? { x: presence.cursor.x, y: presence.cursor.y, tool: 'pointer' } : undefined,
+      button: 'up',
+      selectedElementIds: Object.fromEntries(presence.selectedIds.map((id) => [id, true])),
+      username: pData.userName,
+      color: pData.color,
+      isCurrentUser: false,
+    });
+  }
+
+  const participants: Participant[] = Array.from(participantsMap.entries()).map(([userId, data]) => ({
+    userId,
+    userName: data.userName,
+    color: data.color,
+  }));
+
+  return { status, forceCloseMessage, pushChanges, pushPresence, onPageSwitch, collaborators, participants };
 }
