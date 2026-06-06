@@ -1,4 +1,4 @@
-import { useEffect, useRef, useCallback, useState } from 'react';
+import { useEffect, useRef, useCallback, useState, useMemo } from 'react';
 import type { ExcalidrawElement } from '@excalidraw/excalidraw/element/types';
 import { getPresenceColor } from '../utils/presenceColor';
 
@@ -9,6 +9,7 @@ export type SyncStatus = 'connecting' | 'connected' | 'offline' | 'error';
 export interface UseExcalidrawSyncOptions {
   albumId: string;
   currentPageId: string | null;
+  currentUserId?: string;
   getToken: () => Promise<string | null>;
   onElements: (elements: readonly ExcalidrawElement[], pageId: string) => void;
   onPageEvent: (event: PageEvent) => void;
@@ -45,6 +46,7 @@ interface PushMessage {
 export function useExcalidrawSync({
   albumId,
   currentPageId,
+  currentUserId,
   getToken,
   onElements,
   onPageEvent,
@@ -66,6 +68,7 @@ export function useExcalidrawSync({
   type PresenceData = { pageId: string; cursor: { x: number; y: number } | null; selectedIds: string[] };
   const [participantsMap, setParticipantsMap] = useState<Map<string, ParticipantData>>(new Map());
   const [presenceMap, setPresenceMap] = useState<Map<string, PresenceData>>(new Map());
+  const [myUserId, setMyUserId] = useState<string | null>(currentUserId ?? null);
 
   const send = useCallback((data: object) => {
     const ws = wsRef.current;
@@ -85,6 +88,13 @@ export function useExcalidrawSync({
   const connect = useCallback(async () => {
     const token = await getToken();
     if (!token) return;
+
+    // JWT에서 자신의 userId 추출 (self-presence 필터링용)
+    try {
+      const sub = JSON.parse(atob(token.split('.')[1])).sub as string;
+      if (sub) setMyUserId(sub);
+    } catch {}
+
 
     // 토큰은 URL 쿼리 파라미터가 아닌 connect 메시지 본문으로 전달 (로그/프록시 노출 방지)
     const ws = new WebSocket(`${WS_URL}/sync/excalidraw/${albumId}`);
@@ -163,10 +173,14 @@ export function useExcalidrawSync({
         });
         setPresenceMap((prev) => {
           const next = new Map(prev);
+          const existing = next.get(p.userId);
+          // cursor 이벤트(cursor !== null)이면 기존 selectedIds 유지
+          // selection 이벤트(cursor === null)이면 기존 cursor 유지
+          const isCursorEvent = p.cursor !== null;
           next.set(p.userId, {
-            pageId: p.pageId ?? '',
-            cursor: p.cursor ?? null,
-            selectedIds: Array.isArray(p.selectedIds) ? p.selectedIds : [],
+            pageId: p.pageId ?? existing?.pageId ?? '',
+            cursor: isCursorEvent ? p.cursor : (existing?.cursor ?? null),
+            selectedIds: isCursorEvent ? (existing?.selectedIds ?? []) : (Array.isArray(p.selectedIds) ? p.selectedIds : []),
           });
           return next;
         });
@@ -294,27 +308,35 @@ export function useExcalidrawSync({
     queuedPushRef.current = null;
   }, []);
 
-  // collaborators: 현재 페이지 유저만 (Excalidraw prop용)
-  const collaborators = new Map<string, Collaborator>();
-  for (const [userId, presence] of Array.from(presenceMap.entries())) {
-    if (presence.pageId !== currentPageId) continue;
-    const pData = participantsMap.get(userId);
-    if (!pData) continue;
-    collaborators.set(userId, {
-      pointer: presence.cursor ? { x: presence.cursor.x, y: presence.cursor.y, tool: 'pointer' } : undefined,
-      button: 'up',
-      selectedElementIds: Object.fromEntries(presence.selectedIds.map((id) => [id, true])),
-      username: pData.userName,
-      color: pData.color,
-      isCurrentUser: false,
-    });
-  }
+  // collaborators: 현재 페이지 유저만, 자기 자신 제외 (Excalidraw prop용)
+  const collaborators = useMemo(() => {
+    const map = new Map<string, Collaborator>();
+    for (const [userId, presence] of Array.from(presenceMap.entries())) {
+      if (userId === myUserId) continue;
+      if (presence.pageId !== currentPageId) continue;
+      const pData = participantsMap.get(userId);
+      if (!pData) continue;
+      map.set(userId, {
+        pointer: presence.cursor ? { x: presence.cursor.x, y: presence.cursor.y, tool: 'pointer' } : undefined,
+        button: 'up',
+        selectedElementIds: Object.fromEntries(presence.selectedIds.map((id) => [id, true])),
+        username: pData.userName,
+        color: pData.color,
+        isCurrentUser: false,
+      });
+    }
+    return map;
+  }, [presenceMap, participantsMap, currentPageId, myUserId]);
 
-  const participants: Participant[] = Array.from(participantsMap.entries()).map(([userId, data]) => ({
-    userId,
-    userName: data.userName,
-    color: data.color,
-  }));
+  const participants: Participant[] = useMemo(
+    () => Array.from(participantsMap.entries())
+      .map(([userId, data]) => ({
+        userId,
+        userName: data.userName,
+        color: data.color,
+      })),
+    [participantsMap]
+  );
 
-  return { status, forceCloseMessage, pushChanges, pushPresence, onPageSwitch, collaborators, participants };
+  return { status, forceCloseMessage, pushChanges, pushPresence, onPageSwitch, collaborators, participants, myUserId };
 }
