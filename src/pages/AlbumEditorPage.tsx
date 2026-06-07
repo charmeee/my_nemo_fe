@@ -284,7 +284,7 @@ export default function AlbumEditorPage() {
         </div>
 
         <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
-          {[...participants].sort((a) => a.userId === myUserId ? -1 : 1).map((p) => (
+          {participants.filter((p) => p.userId !== myUserId).map((p) => (
             <div
               key={p.userId}
               title={p.userName}
@@ -294,9 +294,21 @@ export default function AlbumEditorPage() {
                 fontSize: '0.72rem', fontWeight: 600, whiteSpace: 'nowrap', flexShrink: 0,
               }}
             >
-              {p.userId === myUserId ? '나' : (p.userName.length > 8 ? p.userName.slice(0, 8) + '...' : p.userName)}
+              {p.userName.length > 8 ? p.userName.slice(0, 8) + '...' : p.userName}
             </div>
           ))}
+          {myUserId && (
+            <div
+              title="나"
+              style={{
+                padding: '3px 10px', borderRadius: '20px',
+                background: '#6B7280', color: '#fff',
+                fontSize: '0.72rem', fontWeight: 600, whiteSpace: 'nowrap', flexShrink: 0,
+              }}
+            >
+              나
+            </div>
+          )}
           {isConnecting && <StatusPill color="#845EF7" bg="var(--editor-back-hover)" border="var(--editor-border)" label="연결 중" pulse />}
           {isOnline && <StatusPill color="#059669" bg="#ECFDF5" border="#A7F3D0" label="실시간 동기화" />}
           {isOffline && <StatusPill color="#E11D48" bg="#FFF1F2" border="#FECDD3" label="오프라인" />}
