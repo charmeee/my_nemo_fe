@@ -188,9 +188,7 @@ export function useExcalidrawSync({
 
       if (msg.type === 'patch') {
         lastClockByPageRef.current[msg.pageId] = msg.serverClock;
-        if (msg.pageId === currentPageIdRef.current) {
-          onElements(msg.elements ?? [], msg.pageId);
-        }
+        onElements(msg.elements ?? [], msg.pageId);
       }
 
       if (msg.type === 'push_result') {
