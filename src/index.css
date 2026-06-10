@@ -45,6 +45,24 @@
   /* Transition */
   --nemo-ease:     cubic-bezier(0.4, 0, 0.2, 1);
   --nemo-dur:      180ms;
+
+  /* ── Editor-specific Tokens ─────────────────────────── */
+  --editor-bg-app:              #F7F3FF;
+  --editor-header-bg:           rgba(255,255,255,0.92);
+  --editor-header-border:       rgba(132,94,247,0.12);
+  --editor-header-shadow:       0 1px 20px rgba(132,94,247,0.08);
+  --editor-border:              rgba(132,94,247,0.18);
+  --editor-canvas-margin-bg:    #DDD8F0;
+  --editor-canvas-bg:           #FFFCFE;
+  --editor-tab-inactive-bg:     #C8C0DC;
+  --editor-tab-inactive-text:   #6741D9;
+  --editor-tab-active-text:     #3D2052;
+  --editor-title-color:         #3D2052;
+  --editor-back-color:          #845EF7;
+  --editor-back-hover:          #EDE9FF;
+  --editor-scrollbar-thumb:     #A990E8;
+  --editor-icon-color:          #845EF7;
+  --editor-icon-hover:          #F0EBFF;
 }
 
 /* --- Global Reset --- */
@@ -215,3 +233,93 @@ h1, h2, h3 { font-weight: 700; letter-spacing: -0.02em; }
 }
 .nemo-badge-pink { background: var(--nemo-pink-light); color: var(--nemo-pink-dark); }
 .nemo-badge-purple { background: var(--nemo-purple-light); color: var(--nemo-purple); }
+
+/* ── Dark Mode (system preference) ─────────────────────── */
+@media (prefers-color-scheme: dark) {
+  :root {
+    --nemo-bg:          #0F0A0D;
+    --nemo-surface:     #1A1117;
+    --nemo-surface2:    #231820;
+    --nemo-border:      #2E1F28;
+    --nemo-border2:     #3A2A35;
+    --nemo-text:        #F0E8F5;
+    --nemo-text-2:      #C0A8C8;
+    --nemo-text-3:      #8A7090;
+    --nemo-pink-light:  rgba(255,107,157,0.15);
+    --nemo-purple-light:rgba(132,94,247,0.15);
+    --nemo-shadow-card: 0 2px 12px rgba(0,0,0,0.4);
+    --nemo-shadow-md:   0 4px 20px rgba(0,0,0,0.5);
+    --editor-bg-app:              #1A1625;
+    --editor-header-bg:           rgba(28,22,44,0.97);
+    --editor-header-border:       rgba(132,94,247,0.22);
+    --editor-header-shadow:       0 1px 20px rgba(0,0,0,0.3);
+    --editor-border:              rgba(132,94,247,0.28);
+    --editor-canvas-margin-bg:    #2A2140;
+    --editor-canvas-bg:           #1E1B2E;
+    --editor-tab-inactive-bg:     #352A55;
+    --editor-tab-inactive-text:   #B197FC;
+    --editor-tab-active-text:     #E8E0FF;
+    --editor-title-color:         #E8E0FF;
+    --editor-back-color:          #9B7BF8;
+    --editor-back-hover:          #2D2548;
+    --editor-scrollbar-thumb:     #4A3880;
+    --editor-icon-color:          #9B7BF8;
+    --editor-icon-hover:          #2D2548;
+  }
+  body { background: var(--nemo-bg); color: var(--nemo-text); color-scheme: dark; }
+  .nemo-input { background: var(--nemo-surface2); color: var(--nemo-text); border-color: var(--nemo-border2); }
+}
+
+/* .dark class (manual toggle) — overrides both nemo and editor tokens */
+.dark {
+  /* nemo tokens */
+  --nemo-bg:          #0F0A0D;
+  --nemo-surface:     #1A1117;
+  --nemo-surface2:    #231820;
+  --nemo-border:      #2E1F28;
+  --nemo-border2:     #3A2A35;
+  --nemo-text:        #F0E8F5;
+  --nemo-text-2:      #C0A8C8;
+  --nemo-text-3:      #8A7090;
+  --nemo-pink-light:  rgba(255,107,157,0.15);
+  --nemo-purple-light:rgba(132,94,247,0.15);
+  --nemo-shadow-card: 0 2px 12px rgba(0,0,0,0.4);
+  --nemo-shadow-md:   0 4px 20px rgba(0,0,0,0.5);
+
+  /* editor tokens */
+  --editor-bg-app:              #1A1625;
+  --editor-header-bg:           rgba(28,22,44,0.97);
+  --editor-header-border:       rgba(132,94,247,0.22);
+  --editor-header-shadow:       0 1px 20px rgba(0,0,0,0.3);
+  --editor-border:              rgba(132,94,247,0.28);
+  --editor-canvas-margin-bg:    #2A2140;
+  --editor-canvas-bg:           #1E1B2E;
+  --editor-tab-inactive-bg:     #352A55;
+  --editor-tab-inactive-text:   #B197FC;
+  --editor-tab-active-text:     #E8E0FF;
+  --editor-title-color:         #E8E0FF;
+  --editor-back-color:          #9B7BF8;
+  --editor-back-hover:          #2D2548;
+  --editor-scrollbar-thumb:     #4A3880;
+  --editor-icon-color:          #9B7BF8;
+  --editor-icon-hover:          #2D2548;
+
+  color-scheme: dark;
+}
+
+.dark body {
+  background: var(--nemo-bg);
+  color: var(--nemo-text);
+}
+
+.dark .nemo-input {
+  background: var(--nemo-surface2);
+  color: var(--nemo-text);
+  border-color: var(--nemo-border2);
+}
+
+/* Editor scroll area scrollbar */
+.editor-scroll-area::-webkit-scrollbar         { width: 6px; height: 6px; }
+.editor-scroll-area::-webkit-scrollbar-track   { background: transparent; }
+.editor-scroll-area::-webkit-scrollbar-thumb   { background: var(--editor-scrollbar-thumb); border-radius: 3px; }
+.editor-scroll-area::-webkit-scrollbar-corner  { background: transparent; }
