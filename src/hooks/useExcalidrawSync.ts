@@ -13,6 +13,7 @@ export interface UseExcalidrawSyncOptions {
   getToken: () => Promise<string | null>;
   onElements: (elements: readonly ExcalidrawElement[], pageId: string) => void;
   onPageEvent: (event: PageEvent) => void;
+  onFile?: (fileId: string, url: string) => void;
 }
 
 export interface PageEvent {
@@ -50,6 +51,7 @@ export function useExcalidrawSync({
   getToken,
   onElements,
   onPageEvent,
+  onFile,
 }: UseExcalidrawSyncOptions) {
   const wsRef = useRef<WebSocket | null>(null);
   const localClockRef = useRef(0);
@@ -63,6 +65,8 @@ export function useExcalidrawSync({
   const reconnectAttemptsRef = useRef(0);
   const currentPageIdRef = useRef(currentPageId);
   currentPageIdRef.current = currentPageId;
+  const onFileRef = useRef(onFile);
+  onFileRef.current = onFile;
 
   type ParticipantData = { userName: string; color: { background: string; stroke: string } };
   type PresenceData = { pageId: string; cursor: { x: number; y: number } | null; selectedIds: string[] };
@@ -200,6 +204,10 @@ export function useExcalidrawSync({
         flushQueue();
       }
 
+      if (msg.type === 'excalidraw_file') {
+        onFileRef.current?.(msg.fileId, msg.url);
+      }
+
       if (msg.type === 'page_event') {
         onPageEvent({
           event: msg.event,
@@ -291,6 +299,14 @@ export function useExcalidrawSync({
     [send]
   );
 
+  /** 이미지 파일 URL 전송 */
+  const pushFile = useCallback(
+    (fileId: string, url: string) => {
+      send({ type: 'excalidraw_file', fileId, url });
+    },
+    [send]
+  );
+
   /** presence 전송 */
   const pushPresence = useCallback(
     (pageId: string, cursor: { x: number; y: number } | null, selectedIds: string[]) => {
@@ -336,5 +352,5 @@ export function useExcalidrawSync({
     [participantsMap]
   );
 
-  return { status, forceCloseMessage, pushChanges, pushPresence, onPageSwitch, collaborators, participants, myUserId };
+  return { status, forceCloseMessage, pushChanges, pushPresence, pushFile, onPageSwitch, collaborators, participants, myUserId };
 }

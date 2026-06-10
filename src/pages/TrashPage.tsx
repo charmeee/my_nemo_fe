@@ -1,5 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
+import { ArrowLeft, Trash2 } from 'lucide-react';
 import { trashApi, type TrashItem } from '../api/trash';
 
 export default function TrashPage() {
@@ -32,7 +33,7 @@ export default function TrashPage() {
             onClick={() => navigate('/albums')}
             style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#845EF7', fontWeight: 600, fontSize: '0.82rem', padding: '6px 12px', borderRadius: '10px' }}
           >
-            ← 앨범 목록
+            <ArrowLeft size={15} style={{ flexShrink: 0 }} /> 앨범 목록
           </button>
           <div style={{ width: '1px', height: '22px', background: '#D8C8F0' }} />
           <span style={{ fontWeight: 700, fontSize: '1rem', color: '#1C1017' }}>휴지통</span>
@@ -45,7 +46,7 @@ export default function TrashPage() {
 
         {!isLoading && items.length === 0 && (
           <div style={{ textAlign: 'center', padding: '80px 0', color: '#9C8BA6' }}>
-            <div style={{ fontSize: '3rem', marginBottom: '12px' }}>🗑️</div>
+            <div style={{ marginBottom: '12px', color: '#C8B8D8' }}><Trash2 size={48} /></div>
             <p>휴지통이 비어 있습니다</p>
           </div>
         )}

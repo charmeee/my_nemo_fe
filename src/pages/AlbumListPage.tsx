@@ -1,9 +1,11 @@
 import { useState } from 'react';
+import { Trash2, Moon, Sun, Camera } from 'lucide-react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Link, useNavigate } from 'react-router-dom';
 import { albumsApi, type Album, type MemberAvatar } from '../api/albums';
 import { useAuthStore } from '../store/authStore';
 import NotificationBell from '../components/NotificationBell';
+import { useTheme } from '../context/ThemeContext';
 
 /* ─── Album Cover Colors (기본 커버 팔레트) ─── */
 const COVER_COLORS = [
@@ -61,7 +63,7 @@ function AlbumCard({ album, owned }: { album: Album; owned: boolean }) {
           position: 'relative',
         }}>
           {!album.coverImage && (
-            <span style={{ fontSize: '3rem', filter: 'drop-shadow(0 2px 4px rgba(0,0,0,0.15))' }}>📷</span>
+            <Camera size={40} style={{ color: 'rgba(255,255,255,0.75)', filter: 'drop-shadow(0 2px 4px rgba(0,0,0,0.15))' }} />
           )}
           {owned && (
             <div style={{
@@ -202,6 +204,7 @@ export default function AlbumListPage() {
   const [showCreate, setShowCreate] = useState(false);
   const navigate = useNavigate();
   const logout = useAuthStore((s) => s.logout);
+  const { isDark, toggle } = useTheme();
 
   const owned = data?.owned ?? [];
   const joined = data?.joined ?? [];
@@ -240,11 +243,19 @@ export default function AlbumListPage() {
           <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
             <NotificationBell />
             <button
+              onClick={toggle}
+              title={isDark ? '라이트 모드' : '다크 모드'}
+              className="nemo-btn nemo-btn-ghost"
+              style={{ padding: '8px', display: 'flex', alignItems: 'center' }}
+            >
+              {isDark ? <Sun size={16} /> : <Moon size={16} />}
+            </button>
+            <button
               className="nemo-btn nemo-btn-ghost"
               onClick={() => navigate('/trash')}
               style={{ padding: '8px 14px', fontSize: '0.875rem' }}
             >
-              🗑️ 휴지통
+              <Trash2 size={15} style={{ flexShrink: 0 }} /> 휴지통
             </button>
             <button
               className="nemo-btn nemo-btn-primary"
@@ -273,7 +284,7 @@ export default function AlbumListPage() {
             textAlign: 'center', padding: '80px 0',
             animation: 'nemoFadeIn 0.3s ease',
           }}>
-            <div style={{ fontSize: '4rem', marginBottom: '16px' }}>📷</div>
+            <div style={{ marginBottom: '16px', color: '#C0B0CC' }}><Camera size={60} /></div>
             <h2 style={{ fontSize: '1.2rem', color: '#1C1017', marginBottom: '8px', fontWeight: 700 }}>
               아직 앨범이 없어요
             </h2>

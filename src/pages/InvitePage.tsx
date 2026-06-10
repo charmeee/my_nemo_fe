@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { Link2 } from 'lucide-react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { albumsApi } from '../api/albums';
 import { useAuthStore } from '../store/authStore';
@@ -63,7 +64,7 @@ export default function InvitePage() {
       alignItems: 'center', justifyContent: 'center',
       background: 'linear-gradient(135deg, #FFF0F5, #F5EEFF)', padding: '24px',
     }}>
-      <div style={{ fontSize: '3rem', marginBottom: '16px' }}>🔗</div>
+      <div style={{ marginBottom: '16px', color: '#FF6B9D' }}><Link2 size={48} /></div>
       <p style={{ color: '#FF6B9D', fontWeight: 600, fontSize: '1rem' }}>{error}</p>
       <button className="nemo-btn nemo-btn-ghost" style={{ marginTop: '20px' }} onClick={() => navigate('/albums')}>
         홈으로 돌아가기

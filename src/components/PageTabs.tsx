@@ -1,3 +1,4 @@
+import { X } from 'lucide-react';
 
 export interface PageInfo {
   pageId: string;
@@ -28,73 +29,79 @@ export default function PageTabs({
     <div
       style={{
         display: 'flex',
-        alignItems: 'center',
-        gap: '4px',
-        padding: '0 12px',
-        background: 'rgba(255,255,255,0.92)',
-        borderTop: '1px solid rgba(132,94,247,0.12)',
-        height: '40px',
-        overflowX: 'auto',
-        flexShrink: 0,
+        alignItems: 'flex-end',
+        gap: '2px',
+        paddingLeft: '2px',
+        paddingTop: '8px',
       }}
     >
-      {sorted.map((page) => (
-        <div
-          key={page.pageId}
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: '4px',
-            padding: '4px 12px',
-            borderRadius: '8px',
-            cursor: 'pointer',
-            fontSize: '0.78rem',
-            fontWeight: currentPageId === page.pageId ? 700 : 500,
-            background:
-              currentPageId === page.pageId
-                ? 'linear-gradient(135deg, #845EF7, #FF6B9D)'
-                : 'transparent',
-            color: currentPageId === page.pageId ? '#fff' : '#6741D9',
-            border: currentPageId === page.pageId ? 'none' : '1px solid #D8C8F0',
-            transition: 'all 150ms ease',
-            whiteSpace: 'nowrap',
-            flexShrink: 0,
-          }}
-          onClick={() => onSelect(page.pageId)}
-        >
-          {page.name}
-          {canEdit && currentPageId === page.pageId && sorted.length > 1 && (
-            <span
-              onClick={(e) => {
-                e.stopPropagation();
-                onDelete(page.pageId);
-              }}
-              style={{
-                marginLeft: '4px',
-                fontSize: '10px',
-                opacity: 0.7,
-                cursor: 'pointer',
-              }}
-            >
-              ✕
-            </span>
-          )}
-        </div>
-      ))}
+      {sorted.map((page) => {
+        const isActive = currentPageId === page.pageId;
+        return (
+          <div
+            key={page.pageId}
+            onClick={() => onSelect(page.pageId)}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '5px',
+              padding: isActive ? '6px 14px' : '5px 12px',
+              borderRadius: '6px 6px 0 0',
+              cursor: 'pointer',
+              fontSize: '0.78rem',
+              fontWeight: isActive ? 700 : 500,
+              background: isActive ? 'var(--editor-canvas-bg)' : 'var(--editor-tab-inactive-bg)',
+              color: isActive ? 'var(--editor-tab-active-text)' : 'var(--editor-tab-inactive-text)',
+              border: '1px solid var(--editor-border)',
+              borderBottom: isActive ? '1px solid var(--editor-canvas-bg)' : '1px solid var(--editor-border)',
+              position: 'relative',
+              zIndex: isActive ? 1 : 0,
+              marginBottom: isActive ? '-1px' : '0',
+              transition: 'background 120ms ease, color 120ms ease',
+              whiteSpace: 'nowrap',
+              flexShrink: 0,
+              userSelect: 'none',
+            }}
+          >
+            {page.name}
+            {canEdit && isActive && sorted.length > 1 && (
+              <span
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onDelete(page.pageId);
+                }}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  opacity: 0.6,
+                  cursor: 'pointer',
+                  borderRadius: '3px',
+                  padding: '1px',
+                }}
+                onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.opacity = '1'; }}
+                onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.opacity = '0.6'; }}
+              >
+                <X size={10} />
+              </span>
+            )}
+          </div>
+        );
+      })}
 
       {canEdit && (
         <button
           onClick={onAdd}
           style={{
             flexShrink: 0,
-            padding: '4px 10px',
-            borderRadius: '8px',
-            border: '1px dashed #D8C8F0',
-            background: 'none',
-            color: '#845EF7',
+            padding: '5px 10px',
+            borderRadius: '6px 6px 0 0',
+            border: '1px dashed var(--editor-border)',
+            background: 'transparent',
+            color: 'var(--editor-back-color)',
             fontSize: '0.78rem',
             cursor: 'pointer',
             fontWeight: 600,
+            marginBottom: '0',
           }}
         >
           + 페이지

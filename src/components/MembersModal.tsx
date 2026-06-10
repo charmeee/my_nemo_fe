@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { X } from 'lucide-react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { albumsApi, type AlbumMember, type InviteLink } from '../api/albums';
 
@@ -95,7 +96,7 @@ export default function MembersModal({ albumId, myRole, onClose }: Props) {
         <div style={{ padding: '20px 24px 0', borderBottom: '1px solid #F5EFF5' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
             <h2 style={{ fontSize: '1.1rem', fontWeight: 700, color: '#1C1017' }}>멤버 관리</h2>
-            <button onClick={onClose} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#9C8BA6', fontSize: '1.2rem' }}>✕</button>
+            <button onClick={onClose} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#9C8BA6', display: 'flex', alignItems: 'center', padding: '4px' }}><X size={18} /></button>
           </div>
           {isAdmin && (
             <div style={{ display: 'flex', gap: '0' }}>
