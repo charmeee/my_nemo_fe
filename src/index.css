@@ -4,6 +4,9 @@
 
 /* --- Design Tokens --- */
 :root {
+  /* 브라우저 Auto Dark Mode 강제 변환 차단 — 사이트가 light/dark 둘 다 직접 처리한다고 선언 */
+  color-scheme: light dark;
+
   /* Brand Colors */
   --nemo-pink:        #FF6B9D;
   --nemo-pink-light:  #FFE4F0;
