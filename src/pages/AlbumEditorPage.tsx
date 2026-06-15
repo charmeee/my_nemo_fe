@@ -86,30 +86,32 @@ export default function AlbumEditorPage() {
     return token;
   }, [isGuest]);
 
+  const loadExcalidrawFile = useCallback(async (fileId: string, url: string) => {
+    try {
+      const token = useAuthStore.getState().accessToken;
+      const baseUrl = import.meta.env.VITE_API_URL ?? 'http://localhost:8080';
+      const fullUrl = url.startsWith('http') ? url : `${baseUrl}${url}`;
+      const res = await fetch(fullUrl, {
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+      });
+      if (!res.ok) return;
+      const blob = await res.blob();
+      const dataURL = await new Promise<string>((resolve) => {
+        const reader = new FileReader();
+        reader.onloadend = () => resolve(reader.result as string);
+        reader.readAsDataURL(blob);
+      });
+      (excalidrawApiRef.current as any)?.updateScene({
+        files: { [fileId]: { id: fileId, dataURL, mimeType: blob.type, created: Date.now() } },
+      });
+    } catch {}
+  }, []);
+
   const { status, forceCloseMessage, pushChanges, pushPresence, pushFile, onPageSwitch, collaborators, participants, myUserId } = useExcalidrawSync({
     albumId: albumId ?? '',
     currentPageId,
     getToken,
-    onFile: useCallback(async (fileId: string, url: string) => {
-      try {
-        const token = useAuthStore.getState().accessToken;
-        const baseUrl = import.meta.env.VITE_API_URL ?? 'http://localhost:8080';
-        const fullUrl = url.startsWith('http') ? url : `${baseUrl}${url}`;
-        const res = await fetch(fullUrl, {
-          headers: token ? { Authorization: `Bearer ${token}` } : {},
-        });
-        if (!res.ok) return;
-        const blob = await res.blob();
-        const dataURL = await new Promise<string>((resolve) => {
-          const reader = new FileReader();
-          reader.onloadend = () => resolve(reader.result as string);
-          reader.readAsDataURL(blob);
-        });
-        (excalidrawApiRef.current as any)?.updateScene({
-          files: { [fileId]: { id: fileId, dataURL, mimeType: blob.type, created: Date.now() } },
-        });
-      } catch {}
-    }, []),
+    onFile: loadExcalidrawFile,
     onElements: useCallback((elements: readonly ExcalidrawElement[], pageId: string) => {
       if (pageId === currentPageIdRef.current) setRemoteElements(elements);
       setPageElements((prev) => {
@@ -151,14 +153,18 @@ export default function AlbumEditorPage() {
       setRemoteElements(pageElements[pageId] as ExcalidrawElement[]);
     }
     // 항상 REST API로 최신 데이터 fetch (동기화 보장)
-    api.get<{ data: { elements: ExcalidrawElement[] } }>(`/albums/${albumId}/pages/${pageId}/elements`)
+    api.get<{ data: { elements: ExcalidrawElement[]; files?: Record<string, string> } }>(`/albums/${albumId}/pages/${pageId}/elements`)
       .then((r) => {
         const els = r.data.data?.elements ?? [];
+        const files = r.data.data?.files ?? {};
         setPageElements((prev) => ({ ...prev, [pageId]: els }));
         setRemoteElements(els);
+        for (const [fileId, url] of Object.entries(files)) {
+          loadExcalidrawFile(fileId, url);
+        }
       })
       .catch(() => {});
-  }, [albumId, currentPageId, pageElements, onPageSwitch]);
+  }, [albumId, currentPageId, pageElements, onPageSwitch, loadExcalidrawFile]);
 
   const addPageMutation = useMutation({
     mutationFn: () =>
@@ -211,6 +217,7 @@ export default function AlbumEditorPage() {
             const ext = file.mimeType === 'image/jpeg' ? 'jpg' : file.mimeType.split('/')[1];
             const formData = new FormData();
             formData.append('file', blob, `excalidraw-${fileId}.${ext}`);
+            formData.append('excalidrawFileId', fileId);
             const res = await api.post<{ data: { url: string } }>(`/albums/${albumId}/images`, formData);
             pushFileRef.current(fileId, res.data.data.url);
           } catch {

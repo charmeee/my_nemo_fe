@@ -152,6 +152,12 @@ export function useExcalidrawSync({
             }
           }
         }
+        // image fileId → url 매핑은 element와 별도로 전달됨 — onFile 콜백으로 binary 로드
+        if (msg.files && typeof msg.files === 'object') {
+          for (const [fileId, url] of Object.entries<string>(msg.files)) {
+            onFileRef.current?.(fileId, url);
+          }
+        }
       }
 
       if (msg.type === 'user_joined') {
