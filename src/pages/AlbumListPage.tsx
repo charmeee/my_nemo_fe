@@ -6,6 +6,9 @@ import { albumsApi, type Album, type MemberAvatar } from '../api/albums';
 import { useAuthStore } from '../store/authStore';
 import NotificationBell from '../components/NotificationBell';
 import { useTheme } from '../context/ThemeContext';
+import api from '../api/client';
+
+interface MeResponse { id: string; email: string; nickname: string; profileImage?: string }
 
 /* ─── Album Cover Colors (기본 커버 팔레트) ─── */
 const COVER_COLORS = [
@@ -201,6 +204,11 @@ function CreateAlbumModal({ onClose, onCreated }: { onClose: () => void; onCreat
 /* ─── AlbumListPage ─── */
 export default function AlbumListPage() {
   const { data, isLoading } = useQuery({ queryKey: ['albums'], queryFn: albumsApi.list });
+  const { data: me } = useQuery({
+    queryKey: ['me'],
+    queryFn: () => api.get<{ data: MeResponse }>('/auth/me').then((r) => r.data.data),
+    staleTime: 5 * 60 * 1000,
+  });
   const [showCreate, setShowCreate] = useState(false);
   const navigate = useNavigate();
   const logout = useAuthStore((s) => s.logout);
@@ -241,6 +249,36 @@ export default function AlbumListPage() {
           }}>nemo</div>
 
           <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+            {me?.nickname && (
+              <div
+                title={me.email}
+                style={{
+                  display: 'flex', alignItems: 'center', gap: '6px',
+                  padding: '4px 10px 4px 4px', borderRadius: '20px',
+                  background: 'linear-gradient(135deg, rgba(255,107,157,0.12), rgba(132,94,247,0.12))',
+                  border: '1px solid rgba(132,94,247,0.18)',
+                  fontSize: '0.82rem', fontWeight: 600, color: '#5C3A8C',
+                  maxWidth: '200px', overflow: 'hidden',
+                }}
+              >
+                <span
+                  style={{
+                    width: '24px', height: '24px', borderRadius: '50%',
+                    background: me.profileImage
+                      ? `url(${me.profileImage}) center/cover`
+                      : `hsl(${(me.nickname.charCodeAt(0) * 37) % 360}, 60%, 70%)`,
+                    color: '#fff', fontSize: '0.7rem', fontWeight: 700,
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    flexShrink: 0,
+                  }}
+                >
+                  {!me.profileImage && me.nickname.charAt(0).toUpperCase()}
+                </span>
+                <span style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                  {me.nickname}
+                </span>
+              </div>
+            )}
             <NotificationBell />
             <button
               onClick={toggle}
