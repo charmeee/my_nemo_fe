@@ -39,24 +39,40 @@ export default function AlbumEditorPage() {
   // 외부 scroll-area 가 스크롤되면 Excalidraw 의 캐시된 offsetLeft/offsetTop 이
   // stale 해진다 (자기 컨테이너 내부 scroll 만 onScroll 로 잡음). 그 결과
   // event.clientX - state.offsetLeft 로 계산한 포인터 좌표가 outer scroll 만큼
-  // 어긋난다. outer scroll 이벤트에서 refresh() 를 호출해 다시 측정시킨다.
+  // 어긋난다. outer scroll/resize 에서 refresh() 를 호출해 다시 측정시킨다.
+  //
+  // refresh() 는 getBoundingClientRect + setState 이라 캔버스 re-render 를 유발.
+  // Excalidraw 자체도 자기 onScroll 을 100ms debounce 한다(SCROLL_TIMEOUT).
+  // 그에 맞춰 trailing throttle 80ms 로 묶고, 윈도우가 닫힌 뒤 한 번 더 호출해
+  // 마지막 위치를 보장한다 (scroll 멈춘 직후 클릭이 어긋나지 않게).
   useEffect(() => {
     const el = scrollAreaRef.current;
     if (!el) return;
-    let rafId: number | null = null;
+    const THROTTLE_MS = 80;
+    let timerId: ReturnType<typeof setTimeout> | null = null;
+    let queued = false;
+    const fireRefresh = () => (excalidrawApiRef.current as any)?.refresh?.();
     const onScroll = () => {
-      if (rafId !== null) return;
-      rafId = requestAnimationFrame(() => {
-        rafId = null;
-        (excalidrawApiRef.current as any)?.refresh?.();
-      });
+      if (timerId !== null) {
+        queued = true;
+        return;
+      }
+      fireRefresh();
+      timerId = setTimeout(function tail() {
+        timerId = null;
+        if (queued) {
+          queued = false;
+          fireRefresh();
+          timerId = setTimeout(tail, THROTTLE_MS);
+        }
+      }, THROTTLE_MS);
     };
     el.addEventListener('scroll', onScroll, { passive: true });
     window.addEventListener('resize', onScroll, { passive: true });
     return () => {
       el.removeEventListener('scroll', onScroll);
       window.removeEventListener('resize', onScroll);
-      if (rafId !== null) cancelAnimationFrame(rafId);
+      if (timerId !== null) clearTimeout(timerId);
     };
   }, []);
 
