@@ -202,10 +202,51 @@ export default function AlbumEditorPage() {
   const pushFileRef = useRef(pushFile);
   pushFileRef.current = pushFile;
 
+  // drag 중에는 120ms trailing throttle 로 묶어 보내고, drag/edit/resize 가 끝나는
+  // 순간(상태가 truthy → falsy) 마지막 elements 를 즉시 commit 한다.
+  // → WS push 빈도가 1/100 수준으로 떨어져 rate-limit drop 으로 인한 divergence 가 사라진다.
+  const PUSH_THROTTLE_MS = 120;
+  const pushTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const pendingElementsRef = useRef<readonly ExcalidrawElement[] | null>(null);
+  const wasInteractingRef = useRef(false);
+
+  useEffect(() => {
+    return () => {
+      if (pushTimerRef.current) clearTimeout(pushTimerRef.current);
+    };
+  }, []);
+
   const handleChange = useCallback(
-    (elements: readonly ExcalidrawElement[], _appState: AppState, files: BinaryFiles) => {
+    (elements: readonly ExcalidrawElement[], appState: AppState, files: BinaryFiles) => {
       if (!currentPageId || isViewer) return;
-      pushChanges(elements, currentPageId);
+      pendingElementsRef.current = elements;
+
+      const a = appState as any;
+      const isInteracting = !!(a.draggingElement || a.newElement || a.editingElement || a.resizingElement || a.multiElement);
+
+      if (wasInteractingRef.current && !isInteracting) {
+        // drag/edit/resize 종료 → 즉시 마지막 상태 commit
+        wasInteractingRef.current = false;
+        if (pushTimerRef.current) {
+          clearTimeout(pushTimerRef.current);
+          pushTimerRef.current = null;
+        }
+        const els = pendingElementsRef.current;
+        pendingElementsRef.current = null;
+        if (els) pushChanges(els, currentPageId);
+      } else {
+        wasInteractingRef.current = isInteracting;
+        // throttle 윈도우가 비어 있으면 시작 — 그 사이 onChange 는 pendingElementsRef 로 누적
+        if (pushTimerRef.current === null) {
+          pushTimerRef.current = setTimeout(() => {
+            pushTimerRef.current = null;
+            const els = pendingElementsRef.current;
+            pendingElementsRef.current = null;
+            const pid = currentPageIdRef.current;
+            if (els && pid && !isViewer) pushChanges(els, pid);
+          }, PUSH_THROTTLE_MS);
+        }
+      }
 
       // 새로 삽입된 이미지 파일 감지 → 백엔드 업로드 후 WS로 URL 공유
       for (const [fileId, file] of Object.entries(files)) {
