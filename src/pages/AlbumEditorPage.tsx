@@ -104,7 +104,9 @@ export default function AlbumEditorPage() {
       const api: any = excalidrawApiRef.current;
       if (!api) return;
       const fileEntry = { id: fileId, dataURL, mimeType: blob.type, created: Date.now() };
-      // 표준 API: 등록 + image element의 status pending → saved 자동 마킹
+      // addFiles 는 files 등록뿐 아니라 ShapeCache 무효화 + imageCache 갱신 + scene
+      // triggerUpdate 까지 같이 해서 placeholder 가 풀린다. updateScene({files}) 는
+      // file map 만 merge 해서 첫 render 때 캐시된 placeholder 가 그대로 남는다.
       if (typeof api.addFiles === 'function') {
         api.addFiles([fileEntry]);
       } else {
