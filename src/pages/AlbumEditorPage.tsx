@@ -31,9 +31,34 @@ export default function AlbumEditorPage() {
   const [remoteElements, setRemoteElements] = useState<readonly ExcalidrawElement[] | null>(null);
 
   const excalidrawApiRef = useRef<ExcalidrawAPI | null>(null);
+  const scrollAreaRef = useRef<HTMLDivElement | null>(null);
   const currentPageIdRef = useRef(currentPageId);
   currentPageIdRef.current = currentPageId;
   const uploadedFileIdsRef = useRef<Set<string>>(new Set());
+
+  // 외부 scroll-area 가 스크롤되면 Excalidraw 의 캐시된 offsetLeft/offsetTop 이
+  // stale 해진다 (자기 컨테이너 내부 scroll 만 onScroll 로 잡음). 그 결과
+  // event.clientX - state.offsetLeft 로 계산한 포인터 좌표가 outer scroll 만큼
+  // 어긋난다. outer scroll 이벤트에서 refresh() 를 호출해 다시 측정시킨다.
+  useEffect(() => {
+    const el = scrollAreaRef.current;
+    if (!el) return;
+    let rafId: number | null = null;
+    const onScroll = () => {
+      if (rafId !== null) return;
+      rafId = requestAnimationFrame(() => {
+        rafId = null;
+        (excalidrawApiRef.current as any)?.refresh?.();
+      });
+    };
+    el.addEventListener('scroll', onScroll, { passive: true });
+    window.addEventListener('resize', onScroll, { passive: true });
+    return () => {
+      el.removeEventListener('scroll', onScroll);
+      window.removeEventListener('resize', onScroll);
+      if (rafId !== null) cancelAnimationFrame(rafId);
+    };
+  }, []);
 
   const { data: album } = useQuery({
     queryKey: ['album', albumId],
@@ -454,6 +479,7 @@ export default function AlbumEditorPage() {
 
       {/* Canvas scroll area — PageTabs + Canvas */}
       <div
+        ref={scrollAreaRef}
         className="editor-scroll-area"
         style={{
           flex: 1,
