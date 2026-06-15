@@ -101,9 +101,15 @@ export default function AlbumEditorPage() {
         reader.onloadend = () => resolve(reader.result as string);
         reader.readAsDataURL(blob);
       });
-      (excalidrawApiRef.current as any)?.updateScene({
-        files: { [fileId]: { id: fileId, dataURL, mimeType: blob.type, created: Date.now() } },
-      });
+      const api: any = excalidrawApiRef.current;
+      if (!api) return;
+      const fileEntry = { id: fileId, dataURL, mimeType: blob.type, created: Date.now() };
+      // 표준 API: 등록 + image element의 status pending → saved 자동 마킹
+      if (typeof api.addFiles === 'function') {
+        api.addFiles([fileEntry]);
+      } else {
+        api.updateScene({ files: { [fileId]: fileEntry } });
+      }
     } catch {}
   }, []);
 
