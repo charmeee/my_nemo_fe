@@ -196,6 +196,9 @@ export default function ExcalidrawCanvas({
           excalidrawAPI={(api: any) => {
             apiRef.current = api;
             onAPI(api);
+            if (import.meta.env.DEV) {
+              (window as unknown as { excalidrawAPI?: unknown }).excalidrawAPI = api;
+            }
             // API 초기화 시 최신 collaborators 즉시 반영
             if (collaboratorsRef.current) {
               api.updateScene({ collaborators: collaboratorsRef.current });

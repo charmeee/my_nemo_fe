@@ -28,3 +28,11 @@ dist-ssr
 console-debug.txt
 test-results/
 e2e/report/
+
+# Playwright
+/playwright-report/
+/blob-report/
+/playwright/.cache/
+/playwright/.auth/
+tests/.auth/
+tests/report/
