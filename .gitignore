@@ -36,3 +36,8 @@ e2e/report/
 /playwright/.auth/
 tests/.auth/
 tests/report/
+
+# Local agent/MCP metadata
+.claude/
+.mcp.json
+.playwright-mcp/
