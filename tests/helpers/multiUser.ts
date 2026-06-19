@@ -40,6 +40,8 @@ async function openContext(
     storageState: storageStatePath,
   });
   const page = await context.newPage();
+  // about:blank에서는 localStorage 접근 불가 → baseURL origin으로 한 번 navigate.
+  await page.goto('/albums').catch(() => undefined);
   await tryPositionWindow(context, page, x);
   return { context, page, user };
 }

@@ -7,7 +7,8 @@ export default defineConfig({
   fullyParallel: false,
   forbidOnly: !!process.env.CI,
   retries: process.env.CI ? 2 : 0,
-  workers: process.env.CI ? 1 : undefined,
+  // Alice/Bob 단일 계정을 공유하므로 워커 1개로 고정 (병렬 충돌 방지)
+  workers: 1,
   reporter: [['html', { outputFolder: 'tests/report', open: 'never' }], ['line']],
   use: {
     baseURL: 'http://localhost:5173',
