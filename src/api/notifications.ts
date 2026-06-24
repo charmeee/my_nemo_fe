@@ -8,6 +8,7 @@ export interface NotificationItem {
   createdAt: string;
 }
 
+// 알림 목록/안읽음 카운트/읽음 처리 API
 export const notificationsApi = {
   getAll: () =>
     api.get<{ data: NotificationItem[] }>('/notifications').then((r) => r.data.data),
@@ -34,6 +35,7 @@ const NOTIF_LABEL: Record<string, string> = {
   ALBUM_INVITATION: '앨범에 초대됐습니다',
 };
 
+// 알림 타입 코드 → 사용자에게 보여줄 한국어 라벨 변환
 export function notifLabel(type: string): string {
   return NOTIF_LABEL[type] ?? type;
 }

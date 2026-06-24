@@ -44,6 +44,7 @@ interface PushMessage {
   elements: ExcalidrawElement[];
 }
 
+// Excalidraw WS sync 훅: 커스텀 WebSocket 연결 + push queue(LWW) + presence/participants 관리
 export function useExcalidrawSync({
   albumId,
   currentPageId,
@@ -74,6 +75,7 @@ export function useExcalidrawSync({
   const [presenceMap, setPresenceMap] = useState<Map<string, PresenceData>>(new Map());
   const [myUserId, setMyUserId] = useState<string | null>(currentUserId ?? null);
 
+  // WS OPEN 상태일 때만 JSON 메시지 전송
   const send = useCallback((data: object) => {
     const ws = wsRef.current;
     if (ws && ws.readyState === WebSocket.OPEN) {
@@ -81,6 +83,7 @@ export function useExcalidrawSync({
     }
   }, []);
 
+  // 이전 push ack 도착 시 대기열에 쌓인 큐를 다음 push로 승격해서 전송
   const flushQueue = useCallback(() => {
     if (pendingPushRef.current === null && queuedPushRef.current !== null) {
       pendingPushRef.current = queuedPushRef.current;
@@ -89,6 +92,7 @@ export function useExcalidrawSync({
     }
   }, [send]);
 
+  // WS 연결 + 초기 hydration + 모든 서버 메시지 핸들러 등록 + 끊김 시 exponential backoff
   const connect = useCallback(async () => {
     const token = await getToken();
     if (!token) return;
@@ -253,6 +257,7 @@ export function useExcalidrawSync({
     };
   }, [albumId, getToken, send, flushQueue, onElements, onPageEvent]);
 
+  // mount 시 WS 연결, unmount 시 재연결 타이머 + 소켓 정리
   useEffect(() => {
     connect();
     return () => {
@@ -261,6 +266,7 @@ export function useExcalidrawSync({
     };
   }, [connect]);
 
+  // onChange에서 호출: lastSentVersions 비교로 변경된 elements만 push (pending이 있으면 큐에 머지)
   /** onChange에서 호출: 변경된 elements만 push */
   const pushChanges = useCallback(
     (elements: readonly ExcalidrawElement[], pageId: string) => {
@@ -328,7 +334,7 @@ export function useExcalidrawSync({
     queuedPushRef.current = null;
   }, []);
 
-  // collaborators: 현재 페이지 유저만, 자기 자신 제외 (Excalidraw prop용)
+  // collaborators: 현재 페이지 유저만, 자기 자신 제외 (Excalidraw prop용 Map 변환)
   const collaborators = useMemo(() => {
     const map = new Map<string, Collaborator>();
     for (const [userId, presence] of Array.from(presenceMap.entries())) {

@@ -40,6 +40,7 @@ export interface AlbumListResponse {
   joined: Album[];
 }
 
+// 앨범/멤버/초대 관련 REST API 호출 모음
 export const albumsApi = {
   list: () => api.get<{ data: AlbumListResponse }>('/albums').then((r) => r.data.data),
 

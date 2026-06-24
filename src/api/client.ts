@@ -5,6 +5,7 @@ const api = axios.create({
   withCredentials: true,
 });
 
+// 요청 인터셉터: localStorage에서 직접 토큰을 읽어 Authorization 헤더 부착 (Zustand 의존 X)
 api.interceptors.request.use((config) => {
   const token = localStorage.getItem('accessToken');
   if (token) {
@@ -16,11 +17,13 @@ api.interceptors.request.use((config) => {
 let isRefreshing = false;
 let failedQueue: Array<{ resolve: (token: string) => void; reject: (err: unknown) => void }> = [];
 
+// refresh 중에 쌓인 대기 요청들을 새 토큰으로 일괄 처리
 function processQueue(error: unknown, token: string | null) {
   failedQueue.forEach((p) => (error ? p.reject(error) : p.resolve(token!)));
   failedQueue = [];
 }
 
+// 응답 인터셉터: 401 시 /auth/refresh 호출하여 토큰 갱신 + 실패 요청 재시도 (동시 401은 큐로 직렬화)
 api.interceptors.response.use(
   (res) => res,
   async (err) => {

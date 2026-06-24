@@ -15,6 +15,7 @@ interface PageTabsProps {
   canEdit: boolean;
 }
 
+// 멀티페이지 탭 UI: 페이지 선택/추가/삭제 (편집 권한 있을 때만 +버튼/X버튼 표시)
 export default function PageTabs({
   pages,
   currentPageId,

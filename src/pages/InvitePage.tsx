@@ -4,6 +4,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { albumsApi } from '../api/albums';
 import { useAuthStore } from '../store/authStore';
 
+// 초대 링크 페이지: 앨범 정보 조회 + 참여(또는 로그인 우회) + 게스트 미리보기
 export default function InvitePage() {
   const { token } = useParams<{ token: string }>();
   const navigate = useNavigate();
@@ -19,6 +20,7 @@ export default function InvitePage() {
     albumsApi.getInviteInfo(token).then(setInfo).catch(() => setError('유효하지 않은 초대 링크입니다.'));
   }, [token]);
 
+  // 참여 처리: 비로그인 시 pendingInvite 저장 후 로그인 이동, 로그인 시 즉시 참여 (승인필요면 PENDING)
   const handleJoin = async () => {
     if (!accessToken) {
       sessionStorage.setItem('pendingInvite', token!);

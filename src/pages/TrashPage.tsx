@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { ArrowLeft, Trash2 } from 'lucide-react';
 import { trashApi, type TrashItem } from '../api/trash';
 
+// 휴지통 페이지: 삭제된 앨범/페이지 목록 + 복원 + 영구삭제
 export default function TrashPage() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
@@ -74,6 +75,7 @@ export default function TrashPage() {
   );
 }
 
+// 휴지통 카드 한 줄: 남은 보관일 표시 + 복원/영구삭제 버튼
 function TrashCard({ item, onRestore, onDelete }: { item: TrashItem; onRestore: () => void; onDelete: () => void }) {
   const expires = new Date(item.expiresAt);
   const daysLeft = Math.ceil((expires.getTime() - Date.now()) / (1000 * 60 * 60 * 24));

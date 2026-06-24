@@ -8,6 +8,7 @@ export interface TrashItem {
   createdAt: string;
 }
 
+// 휴지통 목록/복원/영구삭제 API
 export const trashApi = {
   getAll: () =>
     api.get<{ data: TrashItem[] }>('/trash').then((r) => r.data.data),

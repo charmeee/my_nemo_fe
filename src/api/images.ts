@@ -9,6 +9,7 @@ export interface ImageItem {
   uploadedAt: string;
 }
 
+// 앨범 이미지 업로드/조회/삭제 API
 export const imagesApi = {
   list: (albumId: string) =>
     api.get<{ data: ImageItem[] }>(`/albums/${albumId}/images`).then((r) => r.data.data),

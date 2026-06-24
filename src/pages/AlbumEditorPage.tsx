@@ -16,6 +16,7 @@ import api from '../api/client';
 
 const API_URL = import.meta.env.VITE_API_URL ?? 'http://localhost:8080';
 
+// 앨범 에디터 페이지: Excalidraw 캔버스 + WS sync + 멀티페이지 + 게스트 read-only 지원
 export default function AlbumEditorPage() {
   const { albumId } = useParams<{ albumId: string }>();
   const navigate = useNavigate();
@@ -84,6 +85,7 @@ export default function AlbumEditorPage() {
 
   const isViewer = isGuest || album?.myRole === 'VIEWER';
 
+  // 페이지 목록 로드: 게스트는 invite code, 로그인 유저는 REST로 첫 페이지를 currentPageId로 세팅
   useEffect(() => {
     if (!albumId) return;
     if (isGuest) {
@@ -109,6 +111,7 @@ export default function AlbumEditorPage() {
     }
   }, [albumId, isGuest]);
 
+  // WS 접속용 토큰 발급: 만료 60초 전이면 미리 /auth/refresh 호출 (게스트는 sessionStorage 토큰 사용)
   const getToken = useCallback(async (): Promise<string | null> => {
     if (isGuest) return sessionStorage.getItem('guestToken');
     let token = useAuthStore.getState().accessToken;
@@ -127,6 +130,7 @@ export default function AlbumEditorPage() {
     return token;
   }, [isGuest]);
 
+  // 이미지 파일 URL → blob → dataURL → Excalidraw API에 등록 (addFiles로 ShapeCache 무효화까지)
   const loadExcalidrawFile = useCallback(async (fileId: string, url: string) => {
     try {
       const token = useAuthStore.getState().accessToken;
@@ -161,6 +165,8 @@ export default function AlbumEditorPage() {
     currentPageId,
     getToken,
     onFile: loadExcalidrawFile,
+    // 서버에서 받은 elements를 페이지별 캐시에 LWW 머지 (현재 페이지면 remoteElements도 업데이트)
+    // CRITICAL: deps 비워두기 — 불안정하면 WS 재연결 루프 발생, 페이지 ID는 ref로 접근
     onElements: useCallback((elements: readonly ExcalidrawElement[], pageId: string) => {
       if (pageId === currentPageIdRef.current) setRemoteElements(elements);
       setPageElements((prev) => {
@@ -174,6 +180,7 @@ export default function AlbumEditorPage() {
         return { ...prev, [pageId]: Array.from(map.values()) };
       });
     }, []),
+    // 다른 클라이언트의 페이지 추가/삭제/재정렬 이벤트 반영 (added는 dedup으로 중복 추가 방지)
     onPageEvent: useCallback((event) => {
       if (event.event === 'added') {
         setPages((prev) => {
@@ -192,6 +199,7 @@ export default function AlbumEditorPage() {
     }, []),
   });
 
+  // 페이지 전환: 캐시 즉시 표시(UX) + REST로 최신 elements/files 다시 받아 동기화 보장
   const handlePageSelect = useCallback((pageId: string) => {
     if (pageId === currentPageId) return;
     onPageSwitch();
@@ -215,6 +223,7 @@ export default function AlbumEditorPage() {
       .catch(() => {});
   }, [albumId, currentPageId, pageElements, onPageSwitch, loadExcalidrawFile]);
 
+  // 새 페이지 생성 (성공 시 onPageEvent와 중복되지 않게 dedup, 바로 해당 페이지로 전환)
   const addPageMutation = useMutation({
     mutationFn: () =>
       api.post<{ data: PageInfo }>(`/albums/${albumId}/pages`, { name: `페이지 ${pages.length + 1}` })
@@ -225,6 +234,8 @@ export default function AlbumEditorPage() {
       onPageSwitch();
     },
   });
+
+  // 페이지 삭제 (현재 페이지면 첫 번째 페이지로 자동 전환)
 
   const deletePageMutation = useMutation({
     mutationFn: (pageId: string) => api.delete(`/albums/${albumId}/pages/${pageId}`),
@@ -257,6 +268,7 @@ export default function AlbumEditorPage() {
     };
   }, []);
 
+  // Excalidraw onChange: drag/edit/resize 중엔 120ms throttle, 끝나는 순간 즉시 flush + 신규 이미지 업로드
   const handleChange = useCallback(
     (elements: readonly ExcalidrawElement[], appState: AppState, files: BinaryFiles) => {
       if (!currentPageId || isViewer) return;
@@ -325,6 +337,7 @@ export default function AlbumEditorPage() {
   isViewerRef.current = isViewer;
 
   const lastCursorPushRef = useRef(0);
+  // 커서 presence 전송 (50ms throttle로 네트워크 부하 제한)
   const handlePointerUpdate = useCallback((payload: { pointer: { x: number; y: number } }) => {
     const now = Date.now();
     if (now - lastCursorPushRef.current < 50) return;
@@ -335,6 +348,7 @@ export default function AlbumEditorPage() {
   }, []);
 
   const selectionTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // 선택 변경 presence 전송 (100ms debounce)
   const handleSelectionChange = useCallback((selectedIds: string[]) => {
     if (selectionTimerRef.current) clearTimeout(selectionTimerRef.current);
     selectionTimerRef.current = setTimeout(() => {
@@ -560,6 +574,7 @@ export default function AlbumEditorPage() {
   );
 }
 
+// WS 연결 상태 표시 pill (연결 중/실시간/오프라인)
 function StatusPill({ color, bg, border, label, pulse }: { color: string; bg: string; border: string; label: string; pulse?: boolean }) {
   return (
     <div style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '4px 10px', borderRadius: '20px', background: bg, border: `1px solid ${border}`, fontSize: '0.72rem', fontWeight: 600, color }}>

@@ -15,6 +15,7 @@ const ROLE_LABEL: Record<string, string> = {
   VIEWER: '뷰어',
 };
 
+// 멤버 관리 모달: 멤버 목록/역할 변경/추방/승인대기/초대 링크 관리 (ADMIN만 초대 탭 노출)
 export default function MembersModal({ albumId, myRole, onClose }: Props) {
   const [tab, setTab] = useState<'members' | 'invite'>('members');
   const isAdmin = myRole === 'ADMIN';
@@ -173,6 +174,7 @@ export default function MembersModal({ albumId, myRole, onClose }: Props) {
   );
 }
 
+// 멤버 한 줄 (승인 대기 시 승인/거절 버튼, 일반 멤버는 역할 변경/추방 버튼)
 function MemberRow({
   member, isAdmin, isPending,
   onKick, onChangeRole, onApprove, onReject,
@@ -230,6 +232,7 @@ function MemberRow({
   );
 }
 
+// 초대 링크 탭: 활성 링크 복사/비활성화, 새 링크 발급, 과거 비활성 링크 재활성화
 function InviteTab({ links, onReissue, onToggle }: {
   links: InviteLink[];
   onReissue: () => void;
@@ -238,6 +241,7 @@ function InviteTab({ links, onReissue, onToggle }: {
   const appUrl = window.location.origin;
   const activeLink = links.find((l) => l.isActive);
 
+  // 초대 링크 클립보드 복사
   const copyLink = (code: string) => {
     navigator.clipboard.writeText(`${appUrl}/invite/${code}`);
   };

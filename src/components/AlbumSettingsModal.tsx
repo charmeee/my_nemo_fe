@@ -8,6 +8,7 @@ interface Props {
   onClose: () => void;
 }
 
+// 앨범 설정 모달 (ADMIN 전용): 이름 변경, 잠금 토글, 삭제(휴지통 이동)
 export default function AlbumSettingsModal({ album, onClose }: Props) {
   const [name, setName] = useState(album.name);
   const queryClient = useQueryClient();
@@ -30,16 +31,19 @@ export default function AlbumSettingsModal({ album, onClose }: Props) {
     },
   });
 
+  // 이름이 비어있지 않고 변경됐을 때만 저장 호출
   const handleSaveName = () => {
     if (name.trim() && name.trim() !== album.name) {
       updateMutation.mutate({ name: name.trim() });
     }
   };
 
+  // 잠금 토글 (잠금 시 편집자 세션 종료됨)
   const handleToggleLock = () => {
     updateMutation.mutate({ isLocked: !album.isLocked });
   };
 
+  // 앨범 삭제: confirm 후 휴지통 이동 (30일 보관)
   const handleDelete = () => {
     if (window.confirm(`"${album.name}" 앨범을 삭제하시겠습니까? 30일간 휴지통에 보관됩니다.`)) {
       deleteMutation.mutate();
