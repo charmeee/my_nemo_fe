@@ -36,6 +36,9 @@ export default function AlbumEditorPage() {
   const currentPageIdRef = useRef(currentPageId);
   currentPageIdRef.current = currentPageId;
   const uploadedFileIdsRef = useRef<Set<string>>(new Set());
+  // 페이지 전환 시 동일 fileId 재다운로드 방지 (in-flight 도 dedup)
+  const loadedFileIdsRef = useRef<Set<string>>(new Set());
+  const inFlightFileIdsRef = useRef<Map<string, Promise<void>>>(new Map());
 
   // 외부 scroll-area 가 스크롤되면 Excalidraw 의 캐시된 offsetLeft/offsetTop 이
   // stale 해진다 (자기 컨테이너 내부 scroll 만 onScroll 로 잡음). 그 결과
@@ -131,33 +134,46 @@ export default function AlbumEditorPage() {
   }, [isGuest]);
 
   // 이미지 파일 URL → blob → dataURL → Excalidraw API에 등록 (addFiles로 ShapeCache 무효화까지)
+  // 동일 fileId 가 이미 로드됐거나 in-flight 면 fetch 스킵
   const loadExcalidrawFile = useCallback(async (fileId: string, url: string) => {
-    try {
-      const token = useAuthStore.getState().accessToken;
-      const baseUrl = import.meta.env.VITE_API_URL ?? 'http://localhost:8080';
-      const fullUrl = url.startsWith('http') ? url : `${baseUrl}${url}`;
-      const res = await fetch(fullUrl, {
-        headers: token ? { Authorization: `Bearer ${token}` } : {},
-      });
-      if (!res.ok) return;
-      const blob = await res.blob();
-      const dataURL = await new Promise<string>((resolve) => {
-        const reader = new FileReader();
-        reader.onloadend = () => resolve(reader.result as string);
-        reader.readAsDataURL(blob);
-      });
-      const api: any = excalidrawApiRef.current;
-      if (!api) return;
-      const fileEntry = { id: fileId, dataURL, mimeType: blob.type, created: Date.now() };
-      // addFiles 는 files 등록뿐 아니라 ShapeCache 무효화 + imageCache 갱신 + scene
-      // triggerUpdate 까지 같이 해서 placeholder 가 풀린다. updateScene({files}) 는
-      // file map 만 merge 해서 첫 render 때 캐시된 placeholder 가 그대로 남는다.
-      if (typeof api.addFiles === 'function') {
-        api.addFiles([fileEntry]);
-      } else {
-        api.updateScene({ files: { [fileId]: fileEntry } });
+    if (loadedFileIdsRef.current.has(fileId)) return;
+    const existing = inFlightFileIdsRef.current.get(fileId);
+    if (existing) return existing;
+
+    const p = (async () => {
+      try {
+        const token = useAuthStore.getState().accessToken;
+        const baseUrl = import.meta.env.VITE_API_URL ?? 'http://localhost:8080';
+        const fullUrl = url.startsWith('http') ? url : `${baseUrl}${url}`;
+        const res = await fetch(fullUrl, {
+          headers: token ? { Authorization: `Bearer ${token}` } : {},
+        });
+        if (!res.ok) return;
+        const blob = await res.blob();
+        const dataURL = await new Promise<string>((resolve) => {
+          const reader = new FileReader();
+          reader.onloadend = () => resolve(reader.result as string);
+          reader.readAsDataURL(blob);
+        });
+        const api: any = excalidrawApiRef.current;
+        if (!api) return;
+        const fileEntry = { id: fileId, dataURL, mimeType: blob.type, created: Date.now() };
+        // addFiles 는 files 등록뿐 아니라 ShapeCache 무효화 + imageCache 갱신 + scene
+        // triggerUpdate 까지 같이 해서 placeholder 가 풀린다. updateScene({files}) 는
+        // file map 만 merge 해서 첫 render 때 캐시된 placeholder 가 그대로 남는다.
+        if (typeof api.addFiles === 'function') {
+          api.addFiles([fileEntry]);
+        } else {
+          api.updateScene({ files: { [fileId]: fileEntry } });
+        }
+        loadedFileIdsRef.current.add(fileId);
+      } catch {}
+      finally {
+        inFlightFileIdsRef.current.delete(fileId);
       }
-    } catch {}
+    })();
+    inFlightFileIdsRef.current.set(fileId, p);
+    return p;
   }, []);
 
   const { status, forceCloseMessage, pushChanges, pushPresence, pushFile, onPageSwitch, collaborators, participants, myUserId } = useExcalidrawSync({
