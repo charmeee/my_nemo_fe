@@ -76,27 +76,40 @@ export async function selectAllAndDelete(page: Page): Promise<void> {
  *
  * 이 방식은 toolbar/단축키/파일 다이얼로그를 우회하므로 환경 의존성 없이 안정적.
  * onChange가 트리거되어 백엔드 저장 + WS broadcast가 정상 발생한다.
+ *
+ * 수MB짜리 base64 문자열을 page.evaluate 인자로 직접 넘기면 Playwright trace가 그
+ * 문자열을 매 호출마다 통째로 직렬화하면서 trace.zip이 부풀어 UI mode 로딩이 깨진다
+ * (`file data stream has unexpected number of bytes` /
+ * `End of central directory record signature not found`).
+ * page.exposeBinding으로 한 번만 노출한 뒤 페이지 안에서 호출 → 반환값(base64)은
+ * trace 액션 인자에 박히지 않는다.
  */
 export async function addImageToCanvas(page: Page, imagePath: string): Promise<void> {
   const buffer = fs.readFileSync(imagePath);
-  const base64 = buffer.toString('base64');
   const ext = path.extname(imagePath).toLowerCase();
   const mime = ext === '.png' ? 'image/png' : ext === '.gif' ? 'image/gif' : 'image/jpeg';
 
+  const bindingName = `__nemoImage_${Date.now()}_${Math.floor(Math.random() * 1_000_000)}`;
+  const base64 = buffer.toString('base64');
+  await page.exposeBinding(bindingName, () => base64);
+
   await page.evaluate(
-    async ({ base64, mime }) => {
-      const api = (window as unknown as {
+    async ({ bindingName, mime }) => {
+      const w = window as unknown as Record<string, unknown> & {
         excalidrawAPI?: {
           addFiles: (files: unknown[]) => void;
           getSceneElements: () => unknown[];
           updateScene: (update: unknown) => void;
         };
-      }).excalidrawAPI;
+      };
+      const api = w.excalidrawAPI;
       if (!api) throw new Error('excalidrawAPI not exposed (dev 빌드에서만 노출됨)');
 
-      const fileId = crypto.randomUUID().replace(/-/g, '');
+      const getBase64 = w[bindingName] as () => Promise<string>;
+      const base64 = await getBase64();
       const dataURL = `data:${mime};base64,${base64}`;
 
+      const fileId = crypto.randomUUID().replace(/-/g, '');
       api.addFiles([
         {
           id: fileId,
@@ -146,7 +159,7 @@ export async function addImageToCanvas(page: Page, imagePath: string): Promise<v
         captureUpdate: 'IMMEDIATELY',
       });
     },
-    { base64, mime },
+    { bindingName, mime },
   );
 
   await page.waitForTimeout(1000);
