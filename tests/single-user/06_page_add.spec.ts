@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { ALICE_AUTH } from '../helpers/users';
+import { SOLO_AUTH } from '../helpers/users';
 import {
   acceptAllDialogs,
   addPage,
@@ -10,7 +10,7 @@ import {
 } from '../helpers/scenarios';
 import { drawRect, getSceneElementCount, waitCanvas } from '../helpers/canvas';
 
-test.use({ storageState: ALICE_AUTH });
+test.use({ storageState: SOLO_AUTH });
 
 test.describe('A-06 새 페이지 생성 & 페이지별 내용 분리', () => {
   test('페이지1(3개) + 페이지2(2개) 추가 후 탭 전환 시 내용 분리, 새로고침 시 유지', async ({ page }) => {

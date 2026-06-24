@@ -16,7 +16,8 @@ export async function createAlbumViaUI(page: Page, name: string): Promise<string
   const input = page.locator('input[placeholder*="앨범 이름"]');
   await expect(input).toBeVisible({ timeout: 5_000 });
   await input.fill(name);
-  await page.getByRole('button', { name: '만들기' }).click();
+  // exact:true 필수 — 앨범 0개 빈 상태에선 본문에 '첫 앨범 만들기' 버튼도 같이 있어서 충돌.
+  await page.getByRole('button', { name: '만들기', exact: true }).click();
   await page.waitForURL(/\/albums\/[a-f0-9-]+$/, { timeout: 10_000 });
   await waitCanvas(page);
   const m = page.url().match(/\/albums\/([a-f0-9-]+)/);

@@ -1,6 +1,6 @@
 import { test as setup, expect } from '@playwright/test';
 import { testLogin, type TestUser } from './helpers/api';
-import { ALICE, ALICE_AUTH, BOB, BOB_AUTH } from './helpers/users';
+import { ALICE, ALICE_AUTH, BOB, BOB_AUTH, SOLO, SOLO_AUTH } from './helpers/users';
 
 const FRONT_BASE = process.env.E2E_FRONT_BASE ?? 'http://localhost:5173';
 
@@ -33,6 +33,10 @@ async function seedAuth(
 
   await context.storageState({ path: storagePath });
 }
+
+setup('seed solo auth', async ({ page, context }) => {
+  await seedAuth(page, context, SOLO, SOLO_AUTH);
+});
 
 setup('seed alice auth', async ({ page, context }) => {
   await seedAuth(page, context, ALICE, ALICE_AUTH);

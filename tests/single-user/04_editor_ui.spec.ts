@@ -1,8 +1,8 @@
 import { test, expect } from '@playwright/test';
-import { ALICE_AUTH } from '../helpers/users';
+import { SOLO_AUTH } from '../helpers/users';
 import { createAlbumViaUI, openAlbumSettings, openMembers, acceptAllDialogs } from '../helpers/scenarios';
 
-test.use({ storageState: ALICE_AUTH });
+test.use({ storageState: SOLO_AUTH });
 
 test.describe('A-04 에디터 UI: 헤더 / 페이지탭 / 캔버스 / 모달', () => {
   test('에디터 진입 후 헤더·탭·캔버스·앨범설정·멤버모달 노출 검증', async ({ page }) => {

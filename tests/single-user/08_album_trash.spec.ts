@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { ALICE_AUTH } from '../helpers/users';
+import { SOLO_AUTH } from '../helpers/users';
 import {
   acceptAllDialogs,
   createAlbumViaUI,
@@ -10,7 +10,7 @@ import {
 } from '../helpers/scenarios';
 import { drawRect, getSceneElementCount, waitCanvas } from '../helpers/canvas';
 
-test.use({ storageState: ALICE_AUTH });
+test.use({ storageState: SOLO_AUTH });
 
 test.describe('A-08 앨범 삭제 → 복원 → 편집 가능', () => {
   test('앨범 휴지통 이동 후 복원 → 에디터 재진입 시 요소 유지 + 신규 편집', async ({ page }) => {

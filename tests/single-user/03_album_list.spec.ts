@@ -2,9 +2,9 @@
 // seed: tests/auth.setup.ts
 
 import { test, expect } from '@playwright/test';
-import { ALICE_AUTH } from '../helpers/users';
+import { SOLO_AUTH } from '../helpers/users';
 
-test.use({ storageState: ALICE_AUTH });
+test.use({ storageState: SOLO_AUTH });
 
 test.describe('A. 단일 사용자 시나리오', () => {
   test('A-03: 앨범 리스트 + 새 앨범 모달 + 카드 노출', async ({ page }) => {
@@ -22,7 +22,7 @@ test.describe('A. 단일 사용자 시나리오', () => {
     await expect(input).toBeVisible();
     await expect(page.getByText('0/30')).toBeVisible();
     await expect(page.getByRole('button', { name: '취소' })).toBeVisible();
-    await expect(page.getByRole('button', { name: '만들기' })).toBeDisabled();
+    await expect(page.getByRole('button', { name: '만들기', exact: true })).toBeDisabled();
 
     // maxLength 35자 입력 → 30자 cap
     await input.fill('1234567890'.repeat(4));
@@ -36,7 +36,7 @@ test.describe('A. 단일 사용자 시나리오', () => {
     // 다시 열고 unique 이름 입력 후 만들기
     await page.getByRole('button', { name: '+ 새 앨범' }).first().click();
     await page.getByRole('textbox', { name: '앨범 이름' }).fill(albumName);
-    await page.getByRole('button', { name: '만들기' }).click();
+    await page.getByRole('button', { name: '만들기', exact: true }).click();
     await expect(page).toHaveURL(/\/albums\/[a-f0-9-]+$/);
     await expect(page.getByText(albumName).first()).toBeVisible();
 

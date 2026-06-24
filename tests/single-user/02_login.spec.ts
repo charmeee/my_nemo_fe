@@ -2,9 +2,9 @@
 // seed: tests/auth.setup.ts
 
 import { test, expect } from '@playwright/test';
-import { ALICE_AUTH } from '../helpers/users';
+import { SOLO_AUTH } from '../helpers/users';
 
-test.use({ storageState: ALICE_AUTH });
+test.use({ storageState: SOLO_AUTH });
 
 test.describe('A. 단일 사용자 시나리오', () => {
   test('A-02: 헤더 닉네임/아이콘 버튼 + 다크모드 토글 + 로그아웃', async ({ page }) => {
@@ -14,9 +14,9 @@ test.describe('A. 단일 사용자 시나리오', () => {
     // nemo 로고
     await expect(page.getByText('nemo').first()).toBeVisible();
 
-    // Alice 닉네임 배지 (title 속성에 이메일 포함)
-    await expect(page.locator('[title*="alice@e2e.test"]')).toBeVisible();
-    await expect(page.getByText('Alice').first()).toBeVisible();
+    // Solo 닉네임 배지 (title 속성에 이메일 포함)
+    await expect(page.locator('[title*="solo@e2e.test"]')).toBeVisible();
+    await expect(page.getByText('Solo').first()).toBeVisible();
 
     // 알림 벨 버튼 (title="알림")
     await expect(page.getByTitle('알림')).toBeVisible();

@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { ALICE_AUTH } from '../helpers/users';
+import { SOLO_AUTH } from '../helpers/users';
 import {
   acceptAllDialogs,
   createAlbumViaUI,
@@ -7,7 +7,7 @@ import {
 } from '../helpers/scenarios';
 import { drawRect, getSceneElementCount, waitCanvas } from '../helpers/canvas';
 
-test.use({ storageState: ALICE_AUTH });
+test.use({ storageState: SOLO_AUTH });
 
 test.describe('A-10 데이터 동기화 — 새로고침 / 새 탭 / 같은 사용자 WS', () => {
   test('새로고침/새 탭에서 데이터 유지 + 새 탭 편집이 원래 탭에 실시간 반영', async ({ page, context }) => {

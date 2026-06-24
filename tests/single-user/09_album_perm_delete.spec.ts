@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { ALICE_AUTH } from '../helpers/users';
+import { SOLO_AUTH } from '../helpers/users';
 import {
   acceptAllDialogs,
   createAlbumViaUI,
@@ -8,7 +8,7 @@ import {
   permanentDeleteFirstInTrash,
 } from '../helpers/scenarios';
 
-test.use({ storageState: ALICE_AUTH });
+test.use({ storageState: SOLO_AUTH });
 
 test.describe('A-09 앨범 재삭제 → 휴지통 영구 삭제', () => {
   test('앨범 휴지통 이동 후 영구 삭제 → 옛 URL 직접 접근 차단', async ({ page }) => {

@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { ALICE_AUTH } from '../helpers/users';
+import { SOLO_AUTH } from '../helpers/users';
 import {
   acceptAllDialogs,
   addPage,
@@ -11,7 +11,7 @@ import {
 } from '../helpers/scenarios';
 import { drawRect, getSceneElementCount, waitCanvas } from '../helpers/canvas';
 
-test.use({ storageState: ALICE_AUTH });
+test.use({ storageState: SOLO_AUTH });
 
 test.describe('A-07 페이지 삭제 → 휴지통 복원 → 편집 가능', () => {
   test('페이지2 삭제 후 휴지통에서 복원 → 재진입 시 내용 유지 + 신규 편집 가능', async ({ page }) => {

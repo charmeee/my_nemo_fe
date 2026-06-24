@@ -1,6 +1,6 @@
 import path from 'node:path';
 import { test, expect } from '@playwright/test';
-import { ALICE_AUTH } from '../helpers/users';
+import { SOLO_AUTH } from '../helpers/users';
 import { createAlbumViaUI, acceptAllDialogs } from '../helpers/scenarios';
 import {
   addImageToCanvas,
@@ -10,7 +10,7 @@ import {
   waitCanvas,
 } from '../helpers/canvas';
 
-test.use({ storageState: ALICE_AUTH });
+test.use({ storageState: SOLO_AUTH });
 
 const IMAGE_FIXTURE = path.resolve(
   process.cwd(),
