@@ -219,15 +219,20 @@ export default function ExcalidrawCanvas({
             if (import.meta.env.DEV) {
               (window as unknown as { excalidrawAPI?: unknown }).excalidrawAPI = api;
             }
-            // API 초기화 시 최신 collaborators 즉시 반영
-            if (collaboratorsRef.current) {
-              api.updateScene({ collaborators: collaboratorsRef.current });
-            }
-            // apiRef가 null이었을 때 수신된 remoteElements 즉시 반영
-            if (pendingRemoteRef.current) {
-              applyRemote(api, pendingRemoteRef.current);
-              pendingRemoteRef.current = null;
-            }
+            // Excalidraw 의 _App 은 자기 constructor 안에서 이 콜백을 동기로 호출한다.
+            // 그 시점에 updateScene 을 부르면 _App.setState 가 mount 전 호출되어
+            // "setState on unmounted component" 경고가 뜬다. mount 이후로 미룬다.
+            queueMicrotask(() => {
+              const a = apiRef.current;
+              if (!a) return;
+              if (collaboratorsRef.current) {
+                a.updateScene({ collaborators: collaboratorsRef.current });
+              }
+              if (pendingRemoteRef.current) {
+                applyRemote(a, pendingRemoteRef.current);
+                pendingRemoteRef.current = null;
+              }
+            });
           }}
           onPointerUpdate={onPointerUpdate as any}
           isCollaborating={true}
