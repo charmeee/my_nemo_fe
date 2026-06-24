@@ -19,9 +19,11 @@ const COVER_COLORS = [
   'linear-gradient(135deg, #339AF0, #74C0FC)',
   'linear-gradient(135deg, #F06595, #FFA8D0)',
 ];
+// 앨범 ID 해시로 결정적인 기본 커버 그라데이션 선택
 const getCoverColor = (id: string) =>
   COVER_COLORS[parseInt(id.replace(/-/g, '').slice(0, 4), 16) % COVER_COLORS.length];
 
+// ISO 시각 → "n분 전" / "n시간 전" 등 상대 시간 한국어 변환
 function relativeTime(iso: string): string {
   const diff = Date.now() - new Date(iso).getTime();
   const mins = Math.floor(diff / 60000);
@@ -35,6 +37,7 @@ function relativeTime(iso: string): string {
 }
 
 /* ─── AlbumCard ─── */
+// 앨범 카드: 커버/이름/최근 멤버 아바타/멤버수 표시 + 호버 애니메이션
 function AlbumCard({ album, owned }: { album: Album; owned: boolean }) {
   const [hovered, setHovered] = useState(false);
   return (
@@ -127,6 +130,7 @@ function AlbumCard({ album, owned }: { album: Album; owned: boolean }) {
 }
 
 /* ─── Create Album Modal ─── */
+// 새 앨범 생성 모달: 이름 입력 → POST /albums → 생성된 앨범으로 이동
 function CreateAlbumModal({ onClose, onCreated }: { onClose: () => void; onCreated: (id: string) => void }) {
   const [name, setName] = useState('');
   const queryClient = useQueryClient();
@@ -202,6 +206,7 @@ function CreateAlbumModal({ onClose, onCreated }: { onClose: () => void; onCreat
 }
 
 /* ─── AlbumListPage ─── */
+// 앨범 목록 페이지: 내가 만든/참여 중인 앨범 그리드 + 헤더(알림, 테마, 휴지통, 생성, 로그아웃)
 export default function AlbumListPage() {
   const { data, isLoading } = useQuery({ queryKey: ['albums'], queryFn: albumsApi.list });
   const { data: me } = useQuery({
@@ -283,17 +288,18 @@ export default function AlbumListPage() {
             <button
               onClick={toggle}
               title={isDark ? '라이트 모드' : '다크 모드'}
+              aria-label={isDark ? '라이트 모드로 전환' : '다크 모드로 전환'}
               className="nemo-btn nemo-btn-ghost"
               style={{ padding: '8px', display: 'flex', alignItems: 'center' }}
             >
-              {isDark ? <Sun size={16} /> : <Moon size={16} />}
+              {isDark ? <Sun size={16} aria-hidden="true" /> : <Moon size={16} aria-hidden="true" />}
             </button>
             <button
               className="nemo-btn nemo-btn-ghost"
               onClick={() => navigate('/trash')}
               style={{ padding: '8px 14px', fontSize: '0.875rem' }}
             >
-              <Trash2 size={15} style={{ flexShrink: 0 }} /> 휴지통
+              <Trash2 size={15} style={{ flexShrink: 0 }} aria-hidden="true" /> 휴지통
             </button>
             <button
               className="nemo-btn nemo-btn-primary"

@@ -1,0 +1,6 @@
+User-agent: *
+Allow: /
+
+# 인증이 필요한 페이지는 인덱싱 의미 없음
+Disallow: /auth/callback
+Disallow: /invite/

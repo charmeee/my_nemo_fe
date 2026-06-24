@@ -1,21 +1,37 @@
 import { useEffect, useRef, useCallback, lazy, Suspense } from 'react';
 import type { ExcalidrawElement } from '@excalidraw/excalidraw/element/types';
 import type { AppState, BinaryFiles } from '@excalidraw/excalidraw/types';
-import '@excalidraw/excalidraw/index.css';
+// `?url` 쿼리: CSS를 JS bundle/entry HTML에 포함시키지 않고, 빌드 산출물 URL 문자열만 받는다.
+// 캔버스가 mount될 때 <link>를 동적으로 주입해서 로그인 화면에서는 받지 않게 한다.
+import excalidrawCssUrl from '@excalidraw/excalidraw/index.css?url';
 
 export const PAGE_WIDTH = 1200;
 export const PAGE_HEIGHT = 600;
 const MIN_ZOOM = 1.0;
 const MAX_ZOOM = 2.5;
 
-const Excalidraw = lazy(() =>
-  import('@excalidraw/excalidraw').then((mod) => ({ default: mod.Excalidraw }))
-);
-
+// Excalidraw 본체는 캔버스 컴포넌트가 실제 mount될 때까지 로드 지연.
+// (이전엔 top-level import로 즉시 평가되어 lazy의 의미가 사라졌음.)
+// CSS도 함께 동적으로 주입해서 entry HTML이 미리 받지 않도록 한다.
 let reconcileElements: ((local: readonly ExcalidrawElement[], remote: readonly ExcalidrawElement[], appState: AppState) => ExcalidrawElement[]) | null = null;
-import('@excalidraw/excalidraw').then((mod) => {
+
+const Excalidraw = lazy(async () => {
+  injectExcalidrawStyles();
+  const mod = await import('@excalidraw/excalidraw');
   reconcileElements = (mod as any).reconcileElements ?? null;
+  return { default: mod.Excalidraw };
 });
+
+let stylesInjected = false;
+// Excalidraw CSS를 <link> 동적 주입 (로그인 등 캔버스 없는 화면이 미리 받지 않게)
+function injectExcalidrawStyles() {
+  if (stylesInjected || typeof document === 'undefined') return;
+  stylesInjected = true;
+  const link = document.createElement('link');
+  link.rel = 'stylesheet';
+  link.href = excalidrawCssUrl;
+  document.head.appendChild(link);
+}
 
 export interface ExcalidrawAPI {
   getSceneElements: () => readonly ExcalidrawElement[];
@@ -36,6 +52,7 @@ export interface ExcalidrawCanvasProps {
   onSelectionChange?: (selectedIds: string[]) => void;
 }
 
+// Excalidraw 캔버스 래퍼: zoom/pan 제한, 원격 엘리먼트 LWW 머지, collaborators presence 반영
 export default function ExcalidrawCanvas({
   pageId,
   initialElements,
@@ -67,6 +84,7 @@ export default function ExcalidrawCanvas({
     return () => el.removeEventListener('wheel', handler, { capture: true });
   }, []);
 
+  // 변경 핸들러: zoom clamp, 스크롤 경계 clamp, 선택 변경 감지 후 상위로 위임
   const handleChange = useCallback(
     (elements: readonly ExcalidrawElement[], appState: AppState, files: BinaryFiles) => {
       const zoomVal = appState.zoom.value;
@@ -109,6 +127,7 @@ export default function ExcalidrawCanvas({
     (apiRef.current as any).updateScene({ collaborators: collaborators ?? new Map() });
   }, [collaborators]);
 
+  // 원격 엘리먼트를 로컬과 LWW(version 큰 쪽 채택)로 머지 후 씬에 반영
   const applyRemote = useCallback((api: ExcalidrawAPI, elements: readonly ExcalidrawElement[]) => {
     const appState = api.getAppState();
     let merged: ExcalidrawElement[];
@@ -126,6 +145,7 @@ export default function ExcalidrawCanvas({
     api.updateScene({ elements: merged, captureUpdate: 'NEVER' });
   }, []);
 
+  // remoteElements 도착 시 즉시 적용 (API 미초기화면 pending에 보관 후 init에서 flush)
   useEffect(() => {
     if (!remoteElements) return;
     if (!apiRef.current) {

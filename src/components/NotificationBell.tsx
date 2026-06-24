@@ -7,6 +7,7 @@ import { useAuthStore } from '../store/authStore';
 
 const API_URL = import.meta.env.VITE_API_URL ?? 'http://localhost:8080';
 
+// 알림 종 컴포넌트: SSE 실시간 수신 + 안읽음 카운트 뱃지 + 패널
 export default function NotificationBell() {
   const [open, setOpen] = useState(false);
   const panelRef = useRef<HTMLDivElement>(null);
@@ -82,8 +83,11 @@ export default function NotificationBell() {
         onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.background = '#F0EBFF'; }}
         onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.background = 'none'; }}
         title="알림"
+        aria-label={count > 0 ? `알림 ${count}개` : '알림'}
+        aria-haspopup="dialog"
+        aria-expanded={open}
       >
-        <Bell size={20} />
+        <Bell size={20} aria-hidden="true" />
         {count > 0 && (
           <span style={{
             position: 'absolute', top: '2px', right: '2px',
@@ -141,10 +145,12 @@ export default function NotificationBell() {
   );
 }
 
+// 알림 한 줄 (클릭 시 읽음 처리 + 해당 앨범 이동)
 function NotifRow({ n, onRead, onClose }: { n: NotificationItem; onRead: () => void; onClose: () => void }) {
   const navigate = useNavigate();
   const albumId = n.payload?.albumId as string | undefined;
 
+  // 읽음 처리 후 앨범 ID가 있으면 해당 앨범으로 이동
   const handleClick = () => {
     onRead();
     if (albumId) {

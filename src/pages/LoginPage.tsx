@@ -143,6 +143,7 @@ const styles = {
 type Tab = 'oauth' | 'email';
 type EmailMode = 'login' | 'register';
 
+// 로그인 페이지: 카카오 OAuth + 이메일 로그인/회원가입 폼
 export default function LoginPage() {
   const [tab, setTab] = useState<Tab>('oauth');
   const [mode, setMode] = useState<EmailMode>('login');
@@ -154,6 +155,7 @@ export default function LoginPage() {
   const setToken = useAuthStore((s) => s.setToken);
   const navigate = useNavigate();
 
+  // 이메일 로그인/회원가입 제출: 성공 시 토큰 저장 후 /albums 로 이동
   const handleEmailSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
@@ -205,7 +207,7 @@ export default function LoginPage() {
   );
 
   return (
-    <div style={styles.page}>
+    <main style={styles.page} aria-label="로그인">
       <div style={styles.card}>
         <div style={styles.logoWrap}>
           <div style={styles.logoIcon}>📷</div>
@@ -330,6 +332,6 @@ export default function LoginPage() {
           로그인 시 서비스 이용약관 및 개인정보처리방침에<br />동의하는 것으로 간주합니다.
         </p>
       </div>
-    </div>
+    </main>
   );
 }
