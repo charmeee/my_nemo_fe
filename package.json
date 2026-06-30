@@ -12,7 +12,8 @@
     "test:e2e:ui": "playwright test --ui",
     "test:e2e:headed": "playwright test --headed",
     "test:e2e:debug": "playwright test --debug",
-    "test:e2e:report": "playwright show-report tests/report"
+    "test:e2e:report": "playwright show-report tests/report",
+    "test:lighthouse": "playwright test tests/lighthouse"
   },
   "dependencies": {
     "@excalidraw/excalidraw": "^0.18.1",
@@ -37,6 +38,8 @@
     "eslint-plugin-react-refresh": "^0.5.2",
     "globals": "^17.6.0",
     "jsonwebtoken": "^9.0.3",
+    "lighthouse": "^13.4.0",
+    "playwright-lighthouse": "^4.0.0",
     "typescript": "~6.0.2",
     "typescript-eslint": "^8.59.2",
     "vite": "^8.0.12"
