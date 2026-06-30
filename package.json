@@ -13,7 +13,7 @@
     "test:e2e:headed": "playwright test --headed",
     "test:e2e:debug": "playwright test --debug",
     "test:e2e:report": "playwright show-report tests/report",
-    "test:lighthouse": "playwright test tests/lighthouse"
+    "test:lighthouse": "vite build && playwright test --config playwright.lighthouse.config.ts"
   },
   "dependencies": {
     "@excalidraw/excalidraw": "^0.18.1",

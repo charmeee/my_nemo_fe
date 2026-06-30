@@ -2,6 +2,8 @@ import { defineConfig, devices } from '@playwright/test';
 
 export default defineConfig({
   testDir: './tests',
+  // lighthouse는 production build에 대고 측정해야 해서 별도 config(playwright.lighthouse.config.ts)로 분리
+  testIgnore: ['**/lighthouse/**'],
   timeout: 30_000,
   expect: { timeout: 8_000 },
   fullyParallel: false,

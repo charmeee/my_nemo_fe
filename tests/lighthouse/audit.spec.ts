@@ -7,7 +7,9 @@ import { testLogin, createAlbum } from '../helpers/api';
 import { SOLO } from '../helpers/users';
 
 const PORT = 9222;
-const FRONT_BASE = process.env.E2E_FRONT_BASE ?? 'http://localhost:5173';
+// Lighthouse는 production build(vite preview, 4173)에 대고 측정한다.
+// dev server(5173)에 측정하면 unminified/unused JS로 점수가 비현실적으로 낮아짐.
+const FRONT_BASE = process.env.E2E_FRONT_BASE ?? 'http://localhost:4173';
 const REPORT_DIR = 'tests/lighthouse/reports';
 
 mkdirSync(REPORT_DIR, { recursive: true });
