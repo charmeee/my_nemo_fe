@@ -12,11 +12,12 @@ const REPORT_DIR = 'tests/lighthouse/reports';
 
 mkdirSync(REPORT_DIR, { recursive: true });
 
+// 폐쇄형 SNS라 SEO 점수는 의미 없음 → 측정 카테고리에서 제외
+const CATEGORIES = ['performance', 'accessibility', 'best-practices'] as const;
 const thresholds = {
   performance: 0,
   accessibility: 0,
   'best-practices': 0,
-  seo: 0,
 };
 
 test.describe.configure({ mode: 'serial', timeout: 600_000 });
@@ -30,6 +31,7 @@ async function audit(page: Page, url: string, name: string) {
     page,
     port: PORT,
     thresholds,
+    opts: { onlyCategories: [...CATEGORIES] },
     reports: {
       formats: { html: true, json: true },
       name: `${name}-${stamp}`,
