@@ -15,12 +15,20 @@ export default function TrashPage() {
 
   const restore = useMutation({
     mutationFn: (id: string) => trashApi.restore(id),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['trash'] }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['trash'] });
+      queryClient.invalidateQueries({ queryKey: ['albums'] });
+      queryClient.invalidateQueries({ queryKey: ['pages'] });
+    },
   });
 
   const deletePerm = useMutation({
     mutationFn: (id: string) => trashApi.permanentDelete(id),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['trash'] }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['trash'] });
+      queryClient.invalidateQueries({ queryKey: ['albums'] });
+      queryClient.invalidateQueries({ queryKey: ['pages'] });
+    },
   });
 
   return (
@@ -53,22 +61,28 @@ export default function TrashPage() {
         )}
 
         <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-          {items.map((item) => (
-            <TrashCard
-              key={item.id}
-              item={item}
-              onRestore={() => {
-                if (window.confirm('앨범을 복원하시겠습니까?')) {
-                  restore.mutate(item.id);
-                }
-              }}
-              onDelete={() => {
-                if (window.confirm('영구 삭제하면 복원할 수 없습니다. 계속하시겠습니까?')) {
-                  deletePerm.mutate(item.id);
-                }
-              }}
-            />
-          ))}
+          {items.map((item) => {
+            const isPending =
+              (restore.isPending && restore.variables === item.id) ||
+              (deletePerm.isPending && deletePerm.variables === item.id);
+            return (
+              <TrashCard
+                key={item.id}
+                item={item}
+                pending={isPending}
+                onRestore={async () => {
+                  if (window.confirm('앨범을 복원하시겠습니까?')) {
+                    await restore.mutateAsync(item.id);
+                  }
+                }}
+                onDelete={async () => {
+                  if (window.confirm('영구 삭제하면 복원할 수 없습니다. 계속하시겠습니까?')) {
+                    await deletePerm.mutateAsync(item.id);
+                  }
+                }}
+              />
+            );
+          })}
         </div>
       </main>
     </div>
@@ -76,7 +90,7 @@ export default function TrashPage() {
 }
 
 // 휴지통 카드 한 줄: 남은 보관일 표시 + 복원/영구삭제 버튼
-function TrashCard({ item, onRestore, onDelete }: { item: TrashItem; onRestore: () => void; onDelete: () => void }) {
+function TrashCard({ item, pending, onRestore, onDelete }: { item: TrashItem; pending: boolean; onRestore: () => void; onDelete: () => void }) {
   const expires = new Date(item.expiresAt);
   const daysLeft = Math.ceil((expires.getTime() - Date.now()) / (1000 * 60 * 60 * 24));
 
@@ -99,16 +113,19 @@ function TrashCard({ item, onRestore, onDelete }: { item: TrashItem; onRestore: 
         <button
           className="nemo-btn nemo-btn-ghost"
           onClick={onRestore}
-          style={{ fontSize: '0.8rem', padding: '6px 14px' }}
+          disabled={pending}
+          style={{ fontSize: '0.8rem', padding: '6px 14px', opacity: pending ? 0.5 : 1, cursor: pending ? 'not-allowed' : 'pointer' }}
         >
-          복원
+          {pending ? '처리 중...' : '복원'}
         </button>
         <button
           onClick={onDelete}
+          disabled={pending}
           style={{
             fontSize: '0.8rem', padding: '6px 14px',
             background: 'none', border: '1px solid #FECDD3', borderRadius: '10px',
-            color: '#E11D48', cursor: 'pointer', fontWeight: 600,
+            color: '#E11D48', cursor: pending ? 'not-allowed' : 'pointer', fontWeight: 600,
+            opacity: pending ? 0.5 : 1,
           }}
         >
           영구 삭제
