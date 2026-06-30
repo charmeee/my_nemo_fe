@@ -226,7 +226,7 @@ export default function ExcalidrawCanvas({
               const a = apiRef.current;
               if (!a) return;
               if (collaboratorsRef.current) {
-                a.updateScene({ collaborators: collaboratorsRef.current });
+                (a as any).updateScene({ collaborators: collaboratorsRef.current });
               }
               if (pendingRemoteRef.current) {
                 applyRemote(a, pendingRemoteRef.current);
