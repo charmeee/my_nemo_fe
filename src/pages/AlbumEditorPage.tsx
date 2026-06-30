@@ -35,6 +35,11 @@ export default function AlbumEditorPage() {
   const scrollAreaRef = useRef<HTMLDivElement | null>(null);
   const currentPageIdRef = useRef(currentPageId);
   currentPageIdRef.current = currentPageId;
+  // pages 도 ref 로 노출 — onElements 콜백이 stable(deps [])이어야 해서 직접 못 씀
+  const pagesRef = useRef(pages);
+  pagesRef.current = pages;
+  // 현재 페이지에서 인덱스 차이가 이 값 이하인 페이지만 캐시 유지
+  const PAGE_CACHE_RADIUS = 2;
   const uploadedFileIdsRef = useRef<Set<string>>(new Set());
   // 페이지 전환 시 동일 fileId 재다운로드 방지 (in-flight 도 dedup)
   const loadedFileIdsRef = useRef<Set<string>>(new Set());
@@ -185,6 +190,11 @@ export default function AlbumEditorPage() {
     // CRITICAL: deps 비워두기 — 불안정하면 WS 재연결 루프 발생, 페이지 ID는 ref로 접근
     onElements: useCallback((elements: readonly ExcalidrawElement[], pageId: string) => {
       if (pageId === currentPageIdRef.current) setRemoteElements(elements);
+      // 현재 페이지에서 ±PAGE_CACHE_RADIUS 밖이면 캐시 머지 skip (메모리/리렌더 절약)
+      const ps = pagesRef.current;
+      const curIdx = ps.findIndex((p) => p.pageId === currentPageIdRef.current);
+      const tgtIdx = ps.findIndex((p) => p.pageId === pageId);
+      if (curIdx < 0 || tgtIdx < 0 || Math.abs(curIdx - tgtIdx) > PAGE_CACHE_RADIUS) return;
       setPageElements((prev) => {
         const existing = prev[pageId];
         if (!existing || existing.length === 0) return { ...prev, [pageId]: elements };
@@ -214,6 +224,26 @@ export default function AlbumEditorPage() {
       }
     }, []),
   });
+
+  // 현재 페이지 / pages 순서 변경 시 ±PAGE_CACHE_RADIUS 밖 캐시 정리
+  // 캐시는 페이지 전환 직후 깜빡임 방지용 — 멀리 있는 페이지는 어차피 REST refetch 하므로 버려도 됨
+  useEffect(() => {
+    if (!currentPageId) return;
+    const curIdx = pages.findIndex((p) => p.pageId === currentPageId);
+    if (curIdx < 0) return;
+    const keepIds = new Set(
+      pages
+        .filter((_, idx) => Math.abs(idx - curIdx) <= PAGE_CACHE_RADIUS)
+        .map((p) => p.pageId)
+    );
+    setPageElements((prev) => {
+      const cachedIds = Object.keys(prev);
+      if (cachedIds.every((id) => keepIds.has(id))) return prev;
+      const next: Record<string, readonly ExcalidrawElement[]> = {};
+      for (const id of cachedIds) if (keepIds.has(id)) next[id] = prev[id];
+      return next;
+    });
+  }, [currentPageId, pages]);
 
   // 페이지 전환: 캐시 즉시 표시(UX) + REST로 최신 elements/files 다시 받아 동기화 보장
   const handlePageSelect = useCallback((pageId: string) => {
