@@ -23,7 +23,15 @@ function processQueue(error: unknown, token: string | null) {
   failedQueue = [];
 }
 
-// 응답 인터셉터: 401 시 /auth/refresh 호출하여 토큰 갱신 + 실패 요청 재시도 (동시 401은 큐로 직렬화)
+// 멱등 메서드만 자동 재시도 대상. POST/PATCH/DELETE 는 재시도 시 중복 리소스 생성 위험이 있어
+// 토큰 갱신만 수행하고 원래 요청은 401 로 rejected 하여 호출자가 명시적으로 처리하도록 한다.
+function isIdempotentMethod(method?: string): boolean {
+  if (!method) return false;
+  const m = method.toUpperCase();
+  return m === 'GET' || m === 'HEAD' || m === 'OPTIONS';
+}
+
+// 응답 인터셉터: 401 시 /auth/refresh 호출하여 토큰 갱신 (GET 계열만 자동 재시도)
 api.interceptors.response.use(
   (res) => res,
   async (err) => {
@@ -35,7 +43,10 @@ api.interceptors.response.use(
         return Promise.reject(err);
       }
 
+      const canRetry = isIdempotentMethod(original.method);
+
       if (isRefreshing) {
+        if (!canRetry) return Promise.reject(err);
         return new Promise((resolve, reject) => {
           failedQueue.push({ resolve, reject });
         }).then((token) => {
@@ -55,6 +66,7 @@ api.interceptors.response.use(
         const { useAuthStore } = await import('../store/authStore');
         useAuthStore.getState().setToken(newToken);
         processQueue(null, newToken);
+        if (!canRetry) return Promise.reject(err);
         original.headers.Authorization = `Bearer ${newToken}`;
         return api(original);
       } catch (refreshErr) {
