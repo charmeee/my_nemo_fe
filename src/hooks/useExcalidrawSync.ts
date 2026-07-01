@@ -1,82 +1,28 @@
 import { useEffect, useRef, useCallback, useState, useMemo } from 'react';
 import type { ExcalidrawElement } from '@excalidraw/excalidraw/element/types';
 import { getPresenceColor } from '../utils/presenceColor';
+import type {
+  SyncStatus,
+  PushMessage,
+  ServerMessage,
+  ParticipantData,
+  PresenceData,
+  Collaborator,
+  Participant,
+  UseExcalidrawSyncOptions,
+} from './useExcalidrawSync.types';
+
+export type {
+  SyncStatus,
+  PageEvent,
+  Collaborator,
+  Participant,
+  UseExcalidrawSyncOptions,
+} from './useExcalidrawSync.types';
 
 const WS_URL = import.meta.env.VITE_WS_URL ?? 'ws://localhost:8080';
 
-export type SyncStatus = 'connecting' | 'connected' | 'offline' | 'error';
-
-export interface UseExcalidrawSyncOptions {
-  albumId: string;
-  currentPageId: string | null;
-  currentUserId?: string;
-  getToken: () => Promise<string | null>;
-  onElements: (elements: readonly ExcalidrawElement[], pageId: string) => void;
-  onPageEvent: (event: PageEvent) => void;
-  onFile?: (fileId: string, url: string) => void;
-}
-
-export interface PageEvent {
-  event: 'added' | 'deleted' | 'reordered';
-  pageId: string;
-  pageName: string;
-  pageOrder: number;
-}
-
-export interface Collaborator {
-  pointer?: { x: number; y: number; tool: 'pointer' };
-  button?: 'up';
-  selectedElementIds?: Record<string, boolean>;
-  username?: string;
-  color?: { background: string; stroke: string };
-  isCurrentUser?: false;
-}
-
-export interface Participant {
-  userId: string;
-  userName: string;
-  color: { background: string; stroke: string };
-}
-
-interface PushMessage {
-  clientClock: number;
-  pageId: string;
-  elements: ExcalidrawElement[];
-}
-
-type ConnectedRoomMember = { userId: string; userName: string };
-type ConnectedFullPage = { pageId: string; serverClock: number; elements?: ExcalidrawElement[] };
-type ConnectedDeltaPage = { serverClock: number; elements?: ExcalidrawElement[] };
-type PresencePayload = {
-  userId: string;
-  userName: string;
-  pageId: string;
-  cursor: { x: number; y: number } | null;
-  selectedIds: string[];
-};
-type ServerMessage = {
-  type?: string;
-  roomMembers?: ConnectedRoomMember[];
-  hydrationType?: 'full' | 'delta';
-  pages?: ConnectedFullPage[];
-  deltaByPage?: Record<string, ConnectedDeltaPage>;
-  files?: Record<string, string>;
-  userId?: string;
-  userName?: string;
-  presence?: PresencePayload;
-  pageId?: string;
-  serverClock?: number;
-  elements?: ExcalidrawElement[];
-  action?: string;
-  fileId?: string;
-  url?: string;
-  event?: 'added' | 'deleted' | 'reordered';
-  pageName?: string;
-  pageOrder?: number;
-  reason?: string;
-  error?: unknown;
-};
-
+// JWT payload 의 sub(=userId) 추출. self-presence 필터링에 사용
 const extractJwtSub = (token: string): string | null => {
   try {
     const payloadBase64 = token.split('.')[1];
@@ -98,32 +44,49 @@ export function useExcalidrawSync({
   onPageEvent,
   onFile,
 }: UseExcalidrawSyncOptions) {
+  // ── 연결/소켓 ────────────────────────────────────────────
+  // 현재 WebSocket 인스턴스 (재연결 시 교체됨)
   const wsRef = useRef<WebSocket | null>(null);
+
+  // ── 클록/버전 (LWW 동기화용) ───────────────────────────────
+  // 로컬 논리 클록. push 마다 ++ 하여 clientClock 으로 전송
   const localClockRef = useRef(0);
+  // 페이지별 마지막으로 수신한 serverClock. 재연결 시 delta hydration 기준점
   const lastClockByPageRef = useRef<Record<string, number>>({});
+  // element id → 마지막으로 서버에 보낸 version. 변경분만 골라내는 데 사용
   const lastSentVersionsRef = useRef<Record<string, number>>({});
+
+  // ── push 큐 (한 번에 하나만 in-flight) ─────────────────────
+  // 서버 ack(push_result) 대기 중인 push. null 이면 즉시 전송 가능
   const pendingPushRef = useRef<PushMessage | null>(null);
+  // pending 이 있는 동안 쌓이는 다음 push. ack 도착 시 승격되어 전송됨
   const queuedPushRef = useRef<PushMessage | null>(null);
+
+  // ── 연결 상태 ─────────────────────────────────────────────
+  // 현재 WS 연결 상태 (UI 표시용)
   const [status, setStatus] = useState<SyncStatus>('connecting');
+  // 강제 종료(추방/권한변경/잠금) 사유 메시지. null 이면 정상
   const [forceCloseMessage, setForceCloseMessage] = useState<string | null>(null);
+
+  // ── 재연결 (exponential backoff) ───────────────────────────
+  // 예약된 재연결 setTimeout 핸들 (unmount 시 정리)
   const reconnectTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // 연속 재연결 시도 횟수. backoff 지연 계산 및 연결 성공 시 0으로 리셋
   const reconnectAttemptsRef = useRef(0);
+
+  // ── 콜백/props 의 최신값 ref (stale closure 방지) ──────────
+  // 현재 페이지 id 의 최신값. 안정적인 콜백(빈 deps) 내부에서 참조
   const currentPageIdRef = useRef(currentPageId);
+  // onFile 콜백의 최신값 ref
   const onFileRef = useRef(onFile);
 
-  type ParticipantData = { userName: string; color: { background: string; stroke: string } };
-  type PresenceData = { pageId: string; cursor: { x: number; y: number } | null; selectedIds: string[] };
+  // ── presence/participants 상태 ─────────────────────────────
+  // userId → 이름·색상. 방에 접속한 전체 참여자
   const [participantsMap, setParticipantsMap] = useState<Map<string, ParticipantData>>(new Map());
+  // userId → 현재 페이지·커서·선택. 실시간 커서/선택 표시용
   const [presenceMap, setPresenceMap] = useState<Map<string, PresenceData>>(new Map());
+  // 자기 자신의 userId (collaborators 에서 self 제외용)
   const [myUserId, setMyUserId] = useState<string | null>(currentUserId ?? null);
-
-  useEffect(() => {
-    currentPageIdRef.current = currentPageId;
-  }, [currentPageId]);
-
-  useEffect(() => {
-    onFileRef.current = onFile;
-  }, [onFile]);
 
   // WS OPEN 상태일 때만 JSON 메시지 전송
   const send = useCallback((data: object) => {
@@ -167,6 +130,139 @@ export function useExcalidrawSync({
       });
     };
 
+    // ── 서버 메시지 타입별 핸들러 ─────────────────────────────
+
+    // connected: 최초 hydration (참여자 목록 + 페이지 elements + 파일)
+    const handleConnected = (msg: ServerMessage) => {
+      reconnectAttemptsRef.current = 0; // 연결 성공 시 backoff 카운터 초기화
+      setStatus('connected');
+      const roomMembers = msg.roomMembers ?? [];
+      if (roomMembers.length > 0) {
+        setParticipantsMap(() => {
+          const next = new Map<string, ParticipantData>();
+          for (const m of roomMembers) {
+            next.set(m.userId, { userName: m.userName, color: getPresenceColor(m.userId) });
+          }
+          return next;
+        });
+      }
+      if (msg.hydrationType === 'full') {
+        for (const page of msg.pages ?? []) {
+          lastClockByPageRef.current[page.pageId] = page.serverClock;
+          if (page.pageId === currentPageIdRef.current) {
+            onElements(page.elements ?? [], page.pageId);
+          }
+        }
+      } else {
+        for (const [pageId, delta] of Object.entries(msg.deltaByPage ?? {})) {
+          lastClockByPageRef.current[pageId] = delta.serverClock;
+          if (pageId === currentPageIdRef.current) {
+            onElements(delta.elements ?? [], pageId);
+          }
+        }
+      }
+      // image fileId → url 매핑은 element와 별도로 전달됨 — onFile 콜백으로 binary 로드
+      if (msg.files && typeof msg.files === 'object') {
+        for (const [fileId, url] of Object.entries<string>(msg.files)) {
+          onFileRef.current?.(fileId, url);
+        }
+      }
+    };
+
+    // user_joined: 참여자 추가
+    const handleUserJoined = (msg: ServerMessage) => {
+      const userId = msg.userId;
+      const userName = msg.userName;
+      if (!userId || !userName) return;
+      setParticipantsMap((prev) => {
+        const next = new Map(prev);
+        next.set(userId, { userName, color: getPresenceColor(userId) });
+        return next;
+      });
+    };
+
+    // user_left: 참여자 + presence 제거
+    const handleUserLeft = (msg: ServerMessage) => {
+      const userId = msg.userId;
+      if (!userId) return;
+      setParticipantsMap((prev) => { const next = new Map(prev); next.delete(userId); return next; });
+      setPresenceMap((prev) => { const next = new Map(prev); next.delete(userId); return next; });
+    };
+
+    // presence: 커서/선택 갱신 (cursor 이벤트 vs selection 이벤트 병합)
+    const handlePresence = (msg: ServerMessage) => {
+      const p = msg.presence;
+      if (!p) return;
+      setParticipantsMap((prev) => {
+        if (prev.has(p.userId)) return prev;
+        const next = new Map(prev);
+        next.set(p.userId, { userName: p.userName, color: getPresenceColor(p.userId) });
+        return next;
+      });
+      setPresenceMap((prev) => {
+        const next = new Map(prev);
+        const existing = next.get(p.userId);
+        // cursor 이벤트(cursor !== null)이면 기존 selectedIds 유지
+        // selection 이벤트(cursor === null)이면 기존 cursor 유지
+        const isCursorEvent = p.cursor !== null;
+        next.set(p.userId, {
+          pageId: p.pageId ?? existing?.pageId ?? '',
+          cursor: isCursorEvent ? p.cursor : (existing?.cursor ?? null),
+          selectedIds: isCursorEvent ? (existing?.selectedIds ?? []) : (Array.isArray(p.selectedIds) ? p.selectedIds : []),
+        });
+        return next;
+      });
+    };
+
+    // patch: 다른 클라이언트의 element 변경 반영
+    const handlePatch = (msg: ServerMessage) => {
+      if (!msg.pageId || typeof msg.serverClock !== 'number') return;
+      lastClockByPageRef.current[msg.pageId] = msg.serverClock;
+      onElements(msg.elements ?? [], msg.pageId);
+    };
+
+    // push_result: 내 push 에 대한 서버 ack. 큐에 쌓인 다음 push 전송
+    const handlePushResult = (msg: ServerMessage) => {
+      pendingPushRef.current = null;
+      if (msg.action === 'rebase') {
+        // server is newer — rebuild queued push from current scene
+        queuedPushRef.current = null; // reset, scene state will rebuild on next onChange
+      }
+      flushQueue();
+    };
+
+    // excalidraw_file: 이미지 fileId → url 수신
+    const handleExcalidrawFile = (msg: ServerMessage) => {
+      if (!msg.fileId || !msg.url) return;
+      onFileRef.current?.(msg.fileId, msg.url);
+    };
+
+    // page_event: 페이지 추가/삭제/순서변경
+    const handlePageEvent = (msg: ServerMessage) => {
+      if (!msg.event || !msg.pageId || !msg.pageName || typeof msg.pageOrder !== 'number') return;
+      onPageEvent({
+        event: msg.event,
+        pageId: msg.pageId,
+        pageName: msg.pageName,
+        pageOrder: msg.pageOrder,
+      });
+    };
+
+    // force-close: 서버 강제 종료(추방/권한변경/잠금)
+    const handleForceClose = (msg: ServerMessage) => {
+      ws.close();
+      const reasonMessages: Record<string, string> = {
+        kicked: '앨범에서 추방되었습니다.',
+        'role-downgraded': '편집 권한이 변경되었습니다.',
+        'album-locked': '앨범이 잠겼습니다.',
+      };
+      const reason = msg.reason;
+      const message = reason ? (reasonMessages[reason] ?? '연결이 종료되었습니다.') : '연결이 종료되었습니다.';
+      setStatus('error');
+      setForceCloseMessage(message);
+    };
+
+    // 수신 메시지를 파싱 후 type 별 핸들러로 디스패치
     ws.onmessage = (event) => {
       let msg: ServerMessage;
       try {
@@ -177,131 +273,18 @@ export function useExcalidrawSync({
         return;
       }
 
-      if (msg.type === 'pong') return;
-
-      if (msg.type === 'connected') {
-        reconnectAttemptsRef.current = 0; // 연결 성공 시 backoff 카운터 초기화
-        setStatus('connected');
-        const roomMembers = msg.roomMembers ?? [];
-        if (roomMembers.length > 0) {
-          setParticipantsMap(() => {
-            const next = new Map<string, ParticipantData>();
-            for (const m of roomMembers) {
-              next.set(m.userId, { userName: m.userName, color: getPresenceColor(m.userId) });
-            }
-            return next;
-          });
-        }
-        if (msg.hydrationType === 'full') {
-          for (const page of msg.pages ?? []) {
-            lastClockByPageRef.current[page.pageId] = page.serverClock;
-            if (page.pageId === currentPageIdRef.current) {
-              onElements(page.elements ?? [], page.pageId);
-            }
-          }
-        } else {
-          for (const [pageId, delta] of Object.entries(msg.deltaByPage ?? {})) {
-            lastClockByPageRef.current[pageId] = delta.serverClock;
-            if (pageId === currentPageIdRef.current) {
-              onElements(delta.elements ?? [], pageId);
-            }
-          }
-        }
-        // image fileId → url 매핑은 element와 별도로 전달됨 — onFile 콜백으로 binary 로드
-        if (msg.files && typeof msg.files === 'object') {
-          for (const [fileId, url] of Object.entries<string>(msg.files)) {
-            onFileRef.current?.(fileId, url);
-          }
-        }
-      }
-
-      if (msg.type === 'user_joined') {
-        const userId = msg.userId;
-        const userName = msg.userName;
-        if (!userId || !userName) return;
-        setParticipantsMap((prev) => {
-          const next = new Map(prev);
-          next.set(userId, { userName, color: getPresenceColor(userId) });
-          return next;
-        });
-      }
-
-      if (msg.type === 'user_left') {
-        const userId = msg.userId;
-        if (!userId) return;
-        setParticipantsMap((prev) => { const next = new Map(prev); next.delete(userId); return next; });
-        setPresenceMap((prev) => { const next = new Map(prev); next.delete(userId); return next; });
-      }
-
-      if (msg.type === 'presence') {
-        const p = msg.presence;
-        if (!p) return;
-        setParticipantsMap((prev) => {
-          if (prev.has(p.userId)) return prev;
-          const next = new Map(prev);
-          next.set(p.userId, { userName: p.userName, color: getPresenceColor(p.userId) });
-          return next;
-        });
-        setPresenceMap((prev) => {
-          const next = new Map(prev);
-          const existing = next.get(p.userId);
-          // cursor 이벤트(cursor !== null)이면 기존 selectedIds 유지
-          // selection 이벤트(cursor === null)이면 기존 cursor 유지
-          const isCursorEvent = p.cursor !== null;
-          next.set(p.userId, {
-            pageId: p.pageId ?? existing?.pageId ?? '',
-            cursor: isCursorEvent ? p.cursor : (existing?.cursor ?? null),
-            selectedIds: isCursorEvent ? (existing?.selectedIds ?? []) : (Array.isArray(p.selectedIds) ? p.selectedIds : []),
-          });
-          return next;
-        });
-      }
-
-      if (msg.type === 'patch') {
-        if (!msg.pageId || typeof msg.serverClock !== 'number') return;
-        lastClockByPageRef.current[msg.pageId] = msg.serverClock;
-        onElements(msg.elements ?? [], msg.pageId);
-      }
-
-      if (msg.type === 'push_result') {
-        pendingPushRef.current = null;
-        if (msg.action === 'rebase') {
-          // server is newer — rebuild queued push from current scene
-          queuedPushRef.current = null; // reset, scene state will rebuild on next onChange
-        }
-        flushQueue();
-      }
-
-      if (msg.type === 'excalidraw_file') {
-        if (!msg.fileId || !msg.url) return;
-        onFileRef.current?.(msg.fileId, msg.url);
-      }
-
-      if (msg.type === 'page_event') {
-        if (!msg.event || !msg.pageId || !msg.pageName || typeof msg.pageOrder !== 'number') return;
-        onPageEvent({
-          event: msg.event,
-          pageId: msg.pageId,
-          pageName: msg.pageName,
-          pageOrder: msg.pageOrder,
-        });
-      }
-
-      if (msg.type === 'force-close') {
-        ws.close();
-        const reasonMessages: Record<string, string> = {
-          kicked: '앨범에서 추방되었습니다.',
-          'role-downgraded': '편집 권한이 변경되었습니다.',
-          'album-locked': '앨범이 잠겼습니다.',
-        };
-        const reason = msg.reason;
-        const message = reason ? (reasonMessages[reason] ?? '연결이 종료되었습니다.') : '연결이 종료되었습니다.';
-        setStatus('error');
-        setForceCloseMessage(message);
-      }
-
-      if (msg.type === 'error') {
-        console.warn('[ExcalidrawSync] server error:', msg.error);
+      switch (msg.type) {
+        case 'pong': break;
+        case 'connected': handleConnected(msg); break;
+        case 'user_joined': handleUserJoined(msg); break;
+        case 'user_left': handleUserLeft(msg); break;
+        case 'presence': handlePresence(msg); break;
+        case 'patch': handlePatch(msg); break;
+        case 'push_result': handlePushResult(msg); break;
+        case 'excalidraw_file': handleExcalidrawFile(msg); break;
+        case 'page_event': handlePageEvent(msg); break;
+        case 'force-close': handleForceClose(msg); break;
+        case 'error': console.warn('[ExcalidrawSync] server error:', msg.error); break;
       }
     };
 
@@ -319,15 +302,6 @@ export function useExcalidrawSync({
       setStatus('offline');
     };
   }, [albumId, getToken, send, flushQueue, onElements, onPageEvent]);
-
-  // mount 시 WS 연결, unmount 시 재연결 타이머 + 소켓 정리
-  useEffect(() => {
-    connect();
-    return () => {
-      if (reconnectTimerRef.current) clearTimeout(reconnectTimerRef.current);
-      wsRef.current?.close();
-    };
-  }, [connect]);
 
   // onChange에서 호출: lastSentVersions 비교로 변경된 elements만 push (pending이 있으면 큐에 머지)
   /** onChange에서 호출: 변경된 elements만 push */
@@ -426,6 +400,29 @@ export function useExcalidrawSync({
       })),
     [participantsMap]
   );
+
+  // ─────────────────────────────────────────────────────────────
+  // Effects (한곳에 모음 — 무엇이 무엇을 트리거하는지 파악용)
+  // ─────────────────────────────────────────────────────────────
+
+  // currentPageId prop 변경 → 안정 콜백에서 참조할 ref 갱신
+  useEffect(() => {
+    currentPageIdRef.current = currentPageId;
+  }, [currentPageId]);
+
+  // onFile prop 변경 → ref 갱신
+  useEffect(() => {
+    onFileRef.current = onFile;
+  }, [onFile]);
+
+  // connect 변경(=mount) → WS 연결 / unmount → 재연결 타이머 + 소켓 정리
+  useEffect(() => {
+    connect();
+    return () => {
+      if (reconnectTimerRef.current) clearTimeout(reconnectTimerRef.current);
+      wsRef.current?.close();
+    };
+  }, [connect]);
 
   return { status, forceCloseMessage, pushChanges, pushPresence, pushFile, onPageSwitch, collaborators, participants, myUserId };
 }
