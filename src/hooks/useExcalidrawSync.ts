@@ -105,33 +105,11 @@ export function useExcalidrawSync({
     }
   }, [send]);
 
-  // WS 연결 + 초기 hydration + 모든 서버 메시지 핸들러 등록 + 끊김 시 exponential backoff
-  const connect = useCallback(async function connectInternal() {
-    const token = await getToken();
-    if (!token) return;
-
-    // JWT에서 자신의 userId 추출 (self-presence 필터링용)
-    const sub = extractJwtSub(token);
-    if (sub) setMyUserId(sub);
-
-
-    // 토큰은 URL 쿼리 파라미터가 아닌 connect 메시지 본문으로 전달 (로그/프록시 노출 방지)
-    const ws = new WebSocket(`${WS_URL}/sync/excalidraw/${albumId}`);
-    wsRef.current = ws;
-    setStatus('connecting');
-
-    ws.onopen = () => {
-      send({
-        type: 'connect',
-        token,
-        lastClockByPage: lastClockByPageRef.current,
-        currentPageId: currentPageIdRef.current,
-        clientId: crypto.randomUUID(),
-      });
-    };
-
-    // ── 서버 메시지 타입별 핸들러 ─────────────────────────────
-
+  // ─────────────────────────────────────────────────────────────
+  // 서버 메시지 타입별 핸들러 → ws.onmessage 로 쓸 디스패처 생성
+  // (force-close 가 소켓을 닫아야 해서 ws 를 인자로 받음)
+  // ─────────────────────────────────────────────────────────────
+  const createMessageHandler = useCallback((ws: WebSocket) => {
     // connected: 최초 hydration (참여자 목록 + 페이지 elements + 파일)
     const handleConnected = (msg: ServerMessage) => {
       reconnectAttemptsRef.current = 0; // 연결 성공 시 backoff 카운터 초기화
@@ -263,7 +241,7 @@ export function useExcalidrawSync({
     };
 
     // 수신 메시지를 파싱 후 type 별 핸들러로 디스패치
-    ws.onmessage = (event) => {
+    return (event: MessageEvent) => {
       let msg: ServerMessage;
       try {
         const parsed: unknown = JSON.parse(event.data);
@@ -287,6 +265,35 @@ export function useExcalidrawSync({
         case 'error': console.warn('[ExcalidrawSync] server error:', msg.error); break;
       }
     };
+  }, [onElements, onPageEvent, flushQueue]);
+
+  // WS 연결 + 초기 hydration + 모든 서버 메시지 핸들러 등록 + 끊김 시 exponential backoff
+  const connect = useCallback(async function connectInternal() {
+    const token = await getToken();
+    if (!token) return;
+
+    // JWT에서 자신의 userId 추출 (self-presence 필터링용)
+    const sub = extractJwtSub(token);
+    if (sub) setMyUserId(sub);
+
+
+    // 토큰은 URL 쿼리 파라미터가 아닌 connect 메시지 본문으로 전달 (로그/프록시 노출 방지)
+    const ws = new WebSocket(`${WS_URL}/sync/excalidraw/${albumId}`);
+    wsRef.current = ws;
+    setStatus('connecting');
+
+    // ── WebSocket 이벤트 바인딩 (open/message/close/error) ────
+    ws.onopen = () => {
+      send({
+        type: 'connect',
+        token,
+        lastClockByPage: lastClockByPageRef.current,
+        currentPageId: currentPageIdRef.current,
+        clientId: crypto.randomUUID(),
+      });
+    };
+
+    ws.onmessage = createMessageHandler(ws);
 
     ws.onclose = () => {
       setStatus('offline');
@@ -301,7 +308,7 @@ export function useExcalidrawSync({
     ws.onerror = () => {
       setStatus('offline');
     };
-  }, [albumId, getToken, send, flushQueue, onElements, onPageEvent]);
+  }, [albumId, getToken, send, createMessageHandler]);
 
   // onChange에서 호출: lastSentVersions 비교로 변경된 elements만 push (pending이 있으면 큐에 머지)
   /** onChange에서 호출: 변경된 elements만 push */
