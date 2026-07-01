@@ -19,6 +19,10 @@ export const notificationsApi = {
   markRead: (id: string) => api.patch(`/notifications/${id}/read`),
 
   markAllRead: () => api.patch('/notifications/read-all'),
+
+  // SSE 전용 단기 토큰(60s). 장기 accessToken 을 URL 에 노출하지 않기 위함.
+  getStreamToken: () =>
+    api.post<{ data: { token: string } }>('/notifications/stream-token').then((r) => r.data.data.token),
 };
 
 const NOTIF_LABEL: Record<string, string> = {

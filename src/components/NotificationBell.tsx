@@ -43,15 +43,30 @@ export default function NotificationBell() {
   });
 
   // SSE 연결 — 서버 알림 실시간 수신
+  // 장기 accessToken 을 URL 에 실지 않도록, 먼저 단기(60s) stream-token 을 발급받아 사용한다.
   useEffect(() => {
     if (!token) return;
-    const url = `${API_URL}/notifications/stream`;
-    const es = new EventSource(url + `?token=${token}`);
-    es.addEventListener('notification', () => {
-      queryClient.invalidateQueries({ queryKey: ['notif-count'] });
-      queryClient.invalidateQueries({ queryKey: ['notifications'] });
-    });
-    return () => es.close();
+    let es: EventSource | null = null;
+    let cancelled = false;
+
+    notificationsApi
+      .getStreamToken()
+      .then((streamToken) => {
+        if (cancelled) return;
+        es = new EventSource(`${API_URL}/notifications/stream?token=${streamToken}`);
+        es.addEventListener('notification', () => {
+          queryClient.invalidateQueries({ queryKey: ['notif-count'] });
+          queryClient.invalidateQueries({ queryKey: ['notifications'] });
+        });
+      })
+      .catch(() => {
+        // stream-token 발급 실패 — 로그아웃 상태로 이후 token 변경 시 재시도됨
+      });
+
+    return () => {
+      cancelled = true;
+      es?.close();
+    };
   }, [token, queryClient]);
 
   // 외부 클릭 시 닫기
