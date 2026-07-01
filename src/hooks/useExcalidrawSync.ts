@@ -44,6 +44,50 @@ interface PushMessage {
   elements: ExcalidrawElement[];
 }
 
+type ConnectedRoomMember = { userId: string; userName: string };
+type ConnectedFullPage = { pageId: string; serverClock: number; elements?: ExcalidrawElement[] };
+type ConnectedDeltaPage = { serverClock: number; elements?: ExcalidrawElement[] };
+type PresencePayload = {
+  userId: string;
+  userName: string;
+  pageId: string;
+  cursor: { x: number; y: number } | null;
+  selectedIds: string[];
+};
+type ServerMessage = {
+  type?: string;
+  roomMembers?: ConnectedRoomMember[];
+  hydrationType?: 'full' | 'delta';
+  pages?: ConnectedFullPage[];
+  deltaByPage?: Record<string, ConnectedDeltaPage>;
+  files?: Record<string, string>;
+  userId?: string;
+  userName?: string;
+  presence?: PresencePayload;
+  pageId?: string;
+  serverClock?: number;
+  elements?: ExcalidrawElement[];
+  action?: string;
+  fileId?: string;
+  url?: string;
+  event?: 'added' | 'deleted' | 'reordered';
+  pageName?: string;
+  pageOrder?: number;
+  reason?: string;
+  error?: unknown;
+};
+
+const extractJwtSub = (token: string): string | null => {
+  try {
+    const payloadBase64 = token.split('.')[1];
+    if (!payloadBase64) return null;
+    const payload = JSON.parse(atob(payloadBase64)) as { sub?: unknown };
+    return typeof payload.sub === 'string' ? payload.sub : null;
+  } catch {
+    return null;
+  }
+};
+
 // Excalidraw WS sync 훅: 커스텀 WebSocket 연결 + push queue(LWW) + presence/participants 관리
 export function useExcalidrawSync({
   albumId,
@@ -65,15 +109,21 @@ export function useExcalidrawSync({
   const reconnectTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const reconnectAttemptsRef = useRef(0);
   const currentPageIdRef = useRef(currentPageId);
-  currentPageIdRef.current = currentPageId;
   const onFileRef = useRef(onFile);
-  onFileRef.current = onFile;
 
   type ParticipantData = { userName: string; color: { background: string; stroke: string } };
   type PresenceData = { pageId: string; cursor: { x: number; y: number } | null; selectedIds: string[] };
   const [participantsMap, setParticipantsMap] = useState<Map<string, ParticipantData>>(new Map());
   const [presenceMap, setPresenceMap] = useState<Map<string, PresenceData>>(new Map());
   const [myUserId, setMyUserId] = useState<string | null>(currentUserId ?? null);
+
+  useEffect(() => {
+    currentPageIdRef.current = currentPageId;
+  }, [currentPageId]);
+
+  useEffect(() => {
+    onFileRef.current = onFile;
+  }, [onFile]);
 
   // WS OPEN 상태일 때만 JSON 메시지 전송
   const send = useCallback((data: object) => {
@@ -93,15 +143,13 @@ export function useExcalidrawSync({
   }, [send]);
 
   // WS 연결 + 초기 hydration + 모든 서버 메시지 핸들러 등록 + 끊김 시 exponential backoff
-  const connect = useCallback(async () => {
+  const connect = useCallback(async function connectInternal() {
     const token = await getToken();
     if (!token) return;
 
     // JWT에서 자신의 userId 추출 (self-presence 필터링용)
-    try {
-      const sub = JSON.parse(atob(token.split('.')[1])).sub as string;
-      if (sub) setMyUserId(sub);
-    } catch {}
+    const sub = extractJwtSub(token);
+    if (sub) setMyUserId(sub);
 
 
     // 토큰은 URL 쿼리 파라미터가 아닌 connect 메시지 본문으로 전달 (로그/프록시 노출 방지)
@@ -120,9 +168,11 @@ export function useExcalidrawSync({
     };
 
     ws.onmessage = (event) => {
-      let msg: any;
+      let msg: ServerMessage;
       try {
-        msg = JSON.parse(event.data);
+        const parsed: unknown = JSON.parse(event.data);
+        if (!parsed || typeof parsed !== 'object') return;
+        msg = parsed as ServerMessage;
       } catch {
         return;
       }
@@ -132,10 +182,11 @@ export function useExcalidrawSync({
       if (msg.type === 'connected') {
         reconnectAttemptsRef.current = 0; // 연결 성공 시 backoff 카운터 초기화
         setStatus('connected');
-        if (msg.roomMembers) {
+        const roomMembers = msg.roomMembers ?? [];
+        if (roomMembers.length > 0) {
           setParticipantsMap(() => {
             const next = new Map<string, ParticipantData>();
-            for (const m of msg.roomMembers as { userId: string; userName: string }[]) {
+            for (const m of roomMembers) {
               next.set(m.userId, { userName: m.userName, color: getPresenceColor(m.userId) });
             }
             return next;
@@ -149,7 +200,7 @@ export function useExcalidrawSync({
             }
           }
         } else {
-          for (const [pageId, delta] of Object.entries<any>(msg.deltaByPage ?? {})) {
+          for (const [pageId, delta] of Object.entries(msg.deltaByPage ?? {})) {
             lastClockByPageRef.current[pageId] = delta.serverClock;
             if (pageId === currentPageIdRef.current) {
               onElements(delta.elements ?? [], pageId);
@@ -165,20 +216,26 @@ export function useExcalidrawSync({
       }
 
       if (msg.type === 'user_joined') {
+        const userId = msg.userId;
+        const userName = msg.userName;
+        if (!userId || !userName) return;
         setParticipantsMap((prev) => {
           const next = new Map(prev);
-          next.set(msg.userId, { userName: msg.userName, color: getPresenceColor(msg.userId) });
+          next.set(userId, { userName, color: getPresenceColor(userId) });
           return next;
         });
       }
 
       if (msg.type === 'user_left') {
-        setParticipantsMap((prev) => { const next = new Map(prev); next.delete(msg.userId); return next; });
-        setPresenceMap((prev) => { const next = new Map(prev); next.delete(msg.userId); return next; });
+        const userId = msg.userId;
+        if (!userId) return;
+        setParticipantsMap((prev) => { const next = new Map(prev); next.delete(userId); return next; });
+        setPresenceMap((prev) => { const next = new Map(prev); next.delete(userId); return next; });
       }
 
       if (msg.type === 'presence') {
-        const p = msg.presence as { userId: string; userName: string; pageId: string; cursor: { x: number; y: number } | null; selectedIds: string[] };
+        const p = msg.presence;
+        if (!p) return;
         setParticipantsMap((prev) => {
           if (prev.has(p.userId)) return prev;
           const next = new Map(prev);
@@ -201,6 +258,7 @@ export function useExcalidrawSync({
       }
 
       if (msg.type === 'patch') {
+        if (!msg.pageId || typeof msg.serverClock !== 'number') return;
         lastClockByPageRef.current[msg.pageId] = msg.serverClock;
         onElements(msg.elements ?? [], msg.pageId);
       }
@@ -215,10 +273,12 @@ export function useExcalidrawSync({
       }
 
       if (msg.type === 'excalidraw_file') {
+        if (!msg.fileId || !msg.url) return;
         onFileRef.current?.(msg.fileId, msg.url);
       }
 
       if (msg.type === 'page_event') {
+        if (!msg.event || !msg.pageId || !msg.pageName || typeof msg.pageOrder !== 'number') return;
         onPageEvent({
           event: msg.event,
           pageId: msg.pageId,
@@ -234,7 +294,8 @@ export function useExcalidrawSync({
           'role-downgraded': '편집 권한이 변경되었습니다.',
           'album-locked': '앨범이 잠겼습니다.',
         };
-        const message = reasonMessages[msg.reason] ?? '연결이 종료되었습니다.';
+        const reason = msg.reason;
+        const message = reason ? (reasonMessages[reason] ?? '연결이 종료되었습니다.') : '연결이 종료되었습니다.';
         setStatus('error');
         setForceCloseMessage(message);
       }
@@ -249,7 +310,9 @@ export function useExcalidrawSync({
       // Exponential backoff: 3s → 6s → 12s → ... 최대 60s
       const delay = Math.min(3000 * Math.pow(2, reconnectAttemptsRef.current), 60000);
       reconnectAttemptsRef.current += 1;
-      reconnectTimerRef.current = setTimeout(() => connect(), delay);
+      reconnectTimerRef.current = setTimeout(() => {
+        void connectInternal();
+      }, delay);
     };
 
     ws.onerror = () => {
