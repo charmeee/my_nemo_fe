@@ -307,10 +307,27 @@ export default function AlbumEditorPage() {
   const pushTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const pendingElementsRef = useRef<readonly ExcalidrawElement[] | null>(null);
   const wasInteractingRef = useRef(false);
+  // unmount cleanup 에서 최신 pushChanges / isViewer 를 참조하기 위한 ref
+  const pushChangesRef = useRef(pushChanges);
+  pushChangesRef.current = pushChanges;
+  const isViewerRef = useRef(isViewer);
+  isViewerRef.current = isViewer;
 
+  // unmount 시 throttle 윈도우 안에 들어온 마지막 stroke 가 유실되지 않도록 즉시 flush.
+  // WebSocket.send 는 브라우저 send buffer 에 큐잉되므로, 뒤이어 useExcalidrawSync 가
+  // ws.close() 를 호출해도 close handshake 전에 프레임이 전송된다.
   useEffect(() => {
     return () => {
-      if (pushTimerRef.current) clearTimeout(pushTimerRef.current);
+      if (pushTimerRef.current) {
+        clearTimeout(pushTimerRef.current);
+        pushTimerRef.current = null;
+      }
+      const els = pendingElementsRef.current;
+      const pid = currentPageIdRef.current;
+      if (els && pid && !isViewerRef.current) {
+        pushChangesRef.current(els, pid);
+      }
+      pendingElementsRef.current = null;
     };
   }, []);
 
