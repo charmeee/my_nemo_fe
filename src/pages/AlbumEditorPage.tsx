@@ -305,7 +305,7 @@ export default function AlbumEditorPage() {
   // → WS push 빈도가 1/100 수준으로 떨어져 rate-limit drop 으로 인한 divergence 가 사라진다.
   const PUSH_THROTTLE_MS = 120;
   const pushTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const pendingElementsRef = useRef<readonly ExcalidrawElement[] | null>(null);
+  const latestSceneRef = useRef<readonly ExcalidrawElement[] | null>(null);
   const wasInteractingRef = useRef(false);
   // unmount cleanup 에서 최신 pushChanges 를 참조하기 위한 ref
   // (isViewerRef 는 아래 handlePointerUpdate 를 위해 이미 선언되어 있으므로 재사용)
@@ -321,12 +321,12 @@ export default function AlbumEditorPage() {
         clearTimeout(pushTimerRef.current);
         pushTimerRef.current = null;
       }
-      const els = pendingElementsRef.current;
+      const els = latestSceneRef.current;
       const pid = currentPageIdRef.current;
       if (els && pid && !isViewerRef.current) {
         pushChangesRef.current(els, pid);
       }
-      pendingElementsRef.current = null;
+      latestSceneRef.current = null;
     };
   }, []);
 
@@ -334,7 +334,7 @@ export default function AlbumEditorPage() {
   const handleChange = useCallback(
     (elements: readonly ExcalidrawElement[], appState: AppState, files: BinaryFiles) => {
       if (!currentPageId || isViewer) return;
-      pendingElementsRef.current = elements;
+      latestSceneRef.current = elements;
 
       const a = appState as any;
       const isInteracting = !!(a.draggingElement || a.newElement || a.editingElement || a.resizingElement || a.multiElement);
@@ -346,17 +346,17 @@ export default function AlbumEditorPage() {
           clearTimeout(pushTimerRef.current);
           pushTimerRef.current = null;
         }
-        const els = pendingElementsRef.current;
-        pendingElementsRef.current = null;
+        const els = latestSceneRef.current;
+        latestSceneRef.current = null;
         if (els) pushChanges(els, currentPageId);
       } else {
         wasInteractingRef.current = isInteracting;
-        // throttle 윈도우가 비어 있으면 시작 — 그 사이 onChange 는 pendingElementsRef 로 누적
+        // throttle 윈도우가 비어 있으면 시작 — 그 사이 onChange 는 latestSceneRef 로 누적
         if (pushTimerRef.current === null) {
           pushTimerRef.current = setTimeout(() => {
             pushTimerRef.current = null;
-            const els = pendingElementsRef.current;
-            pendingElementsRef.current = null;
+            const els = latestSceneRef.current;
+            latestSceneRef.current = null;
             const pid = currentPageIdRef.current;
             if (els && pid && !isViewer) pushChanges(els, pid);
           }, PUSH_THROTTLE_MS);
