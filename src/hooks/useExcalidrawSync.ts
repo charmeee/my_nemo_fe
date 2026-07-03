@@ -58,8 +58,8 @@ export function useExcalidrawSync({
 
   // ── push 큐 (한 번에 하나만 in-flight) ─────────────────────
   // 서버 ack(push_result) 대기 중인 push. null 이면 즉시 전송 가능
-  const pendingPushRef = useRef<PushMessage | null>(null);
-  // pending 이 있는 동안 쌓이는 다음 push. ack 도착 시 승격되어 전송됨
+  const inFlightPushRef = useRef<PushMessage | null>(null);
+  // in-flight 가 있는 동안 쌓이는 다음 push. ack 도착 시 승격되어 전송됨
   const queuedPushRef = useRef<PushMessage | null>(null);
 
   // ── 연결 상태 ─────────────────────────────────────────────
@@ -98,10 +98,10 @@ export function useExcalidrawSync({
 
   // 이전 push ack 도착 시 대기열에 쌓인 큐를 다음 push로 승격해서 전송
   const flushQueue = useCallback(() => {
-    if (pendingPushRef.current === null && queuedPushRef.current !== null) {
-      pendingPushRef.current = queuedPushRef.current;
+    if (inFlightPushRef.current === null && queuedPushRef.current !== null) {
+      inFlightPushRef.current = queuedPushRef.current;
       queuedPushRef.current = null;
-      send({ type: 'push', ...pendingPushRef.current });
+      send({ type: 'push', ...inFlightPushRef.current });
     }
   }, [send]);
 
@@ -201,7 +201,7 @@ export function useExcalidrawSync({
 
     // push_result: 내 push 에 대한 서버 ack. 큐에 쌓인 다음 push 전송
     const handlePushResult = (msg: ServerMessage) => {
-      pendingPushRef.current = null;
+      inFlightPushRef.current = null;
       if (msg.action === 'rebase') {
         // server is newer — rebuild queued push from current scene
         queuedPushRef.current = null; // reset, scene state will rebuild on next onChange
@@ -310,7 +310,7 @@ export function useExcalidrawSync({
     };
   }, [albumId, getToken, send, createMessageHandler]);
 
-  // onChange에서 호출: lastSentVersions 비교로 변경된 elements만 push (pending이 있으면 큐에 머지)
+  // onChange에서 호출: lastSentVersions 비교로 변경된 elements만 push (in-flight 가 있으면 큐에 머지)
   /** onChange에서 호출: 변경된 elements만 push */
   const pushChanges = useCallback(
     (elements: readonly ExcalidrawElement[], pageId: string) => {
@@ -331,8 +331,8 @@ export function useExcalidrawSync({
         elements: changed as ExcalidrawElement[],
       };
 
-      if (pendingPushRef.current === null) {
-        pendingPushRef.current = msg;
+      if (inFlightPushRef.current === null) {
+        inFlightPushRef.current = msg;
         send({ type: 'push', ...msg });
       } else {
         // merge into queued
@@ -374,7 +374,7 @@ export function useExcalidrawSync({
   /** 페이지 전환 시 lastSentVersions 초기화 */
   const onPageSwitch = useCallback(() => {
     lastSentVersionsRef.current = {};
-    pendingPushRef.current = null;
+    inFlightPushRef.current = null;
     queuedPushRef.current = null;
   }, []);
 
