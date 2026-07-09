@@ -15,6 +15,33 @@ const ROLE_LABEL: Record<string, string> = {
   VIEWER: '뷰어',
 };
 
+const copyTextWithFallback = async (text: string) => {
+  try {
+    if (!navigator.clipboard?.writeText) {
+      throw new Error('Clipboard API is unavailable');
+    }
+    await navigator.clipboard.writeText(text);
+    return true;
+  } catch {
+    const textarea = document.createElement('textarea');
+    textarea.value = text;
+    textarea.setAttribute('readonly', '');
+    textarea.style.position = 'fixed';
+    textarea.style.top = '-9999px';
+    textarea.style.left = '-9999px';
+    document.body.appendChild(textarea);
+    textarea.select();
+
+    try {
+      return document.execCommand('copy');
+    } catch {
+      return false;
+    } finally {
+      document.body.removeChild(textarea);
+    }
+  }
+};
+
 // 멤버 관리 모달: 멤버 목록/역할 변경/추방/승인대기/초대 링크 관리 (ADMIN만 초대 탭 노출)
 export default function MembersModal({ albumId, myRole, onClose }: Props) {
   const [tab, setTab] = useState<'members' | 'invite'>('members');
@@ -240,10 +267,13 @@ function InviteTab({ links, onReissue, onToggle }: {
 }) {
   const appUrl = window.location.origin;
   const activeLink = links.find((l) => l.isActive);
+  const [copyStatus, setCopyStatus] = useState<'idle' | 'copied' | 'failed'>('idle');
 
   // 초대 링크 클립보드 복사
-  const copyLink = (code: string) => {
-    navigator.clipboard.writeText(`${appUrl}/invite/${code}`);
+  const copyLink = async (code: string) => {
+    const copied = await copyTextWithFallback(`${appUrl}/invite/${code}`);
+    setCopyStatus(copied ? 'copied' : 'failed');
+    window.setTimeout(() => setCopyStatus('idle'), 2000);
   };
 
   return (
@@ -263,7 +293,7 @@ function InviteTab({ links, onReissue, onToggle }: {
               onClick={() => copyLink(activeLink.code)}
               style={{ flex: 1, padding: '8px', background: '#845EF7', border: 'none', borderRadius: '10px', color: '#fff', fontWeight: 700, fontSize: '0.82rem', cursor: 'pointer' }}
             >
-              링크 복사
+              {copyStatus === 'copied' ? '복사 완료' : copyStatus === 'failed' ? '복사 실패' : '링크 복사'}
             </button>
             <button
               onClick={() => onToggle(activeLink.id, false)}
